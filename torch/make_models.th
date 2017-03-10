@@ -1,0 +1,99 @@
+require 'cunn'
+require 'cudnn'
+require 'nn';
+
+function makeXavierGaussian(model)
+    for idx=1,#model do
+        local m = model.modules[idx]
+        if m.weight then
+            local var=nil;
+            if m.__typename == 'nn.SpatialConvolution' or m.__typename == 'cudnn.SpatialConvolution' then
+                var = {m.nInputPlane*m.kH*m.kW, m.nOutputPlane*m.kH*m.kW}
+            elseif m.__typename == 'nn.SpatialConvolutionMM' then
+                var = {m.nInputPlane*m.kH*m.kW, m.nOutputPlane*m.kH*m.kW}
+            elseif m.__typename == 'nn.LateralConvolution' then
+                var = {m.nInputPlane*1*1, m.nOutputPlane*1*1}
+            elseif m.__typename == 'nn.VerticalConvolution' then
+                var = {1*m.kH*m.kW, 1*m.kH*m.kW}
+            elseif m.__typename == 'nn.HorizontalConvolution' then
+                var = {1*m.kH*m.kW, 1*m.kH*m.kW}
+            elseif m.__typename == 'nn.Linear' then
+                var = {m.weight:size(2), m.weight:size(1)}
+            elseif m.__typename == 'nn.TemporalConvolution' then
+                var = {m.weight:size(2), m.weight:size(1)}
+            end
+            if var then
+	            var = 2/(var[1] + var[2])
+	            m.weight=torch.randn(m.weight:size()):mul(torch.sqrt(var));
+	            m.bias=torch.zeros(m.bias:size());
+	            -- print (m.weight:size(),var,torch.var(m.weight));
+	        end
+        end
+    end
+    return model
+end
+
+function initializeKhorrami(model,k)
+    for idx=1,#model do
+        local m = model.modules[idx]
+        if m.weight then
+            local var=nil;
+            if m.__typename == 'nn.SpatialConvolution' or m.__typename == 'cudnn.SpatialConvolution' then
+                var = {m.nInputPlane*m.kH*m.kW, m.nOutputPlane*m.kH*m.kW}
+            elseif m.__typename == 'nn.SpatialConvolutionMM' then
+                var = {m.nInputPlane*m.kH*m.kW, m.nOutputPlane*m.kH*m.kW}
+            elseif m.__typename == 'nn.LateralConvolution' then
+                var = {m.nInputPlane*1*1, m.nOutputPlane*1*1}
+            elseif m.__typename == 'nn.VerticalConvolution' then
+                var = {1*m.kH*m.kW, 1*m.kH*m.kW}
+            elseif m.__typename == 'nn.HorizontalConvolution' then
+                var = {1*m.kH*m.kW, 1*m.kH*m.kW}
+            elseif m.__typename == 'nn.Linear' then
+                var = {m.weight:size(2), m.weight:size(1)}
+            elseif m.__typename == 'nn.TemporalConvolution' then
+                var = {m.weight:size(2), m.weight:size(1)}
+            end
+            if var then
+            	local k_curr=torch.uniform(k[1],k[2])
+	            local std=k_curr/var[1];
+	            m.weight=torch.randn(m.weight:size()):mul(std);
+	            m.bias=torch.zeros(m.bias:size());
+	            -- print (m.weight:size(),var[1],std,torch.sqrt(torch.var(m.weight)));
+	        end
+        end
+    end
+    return model
+end
+
+
+function createBaseKhorramiModel(out_file,num_out)
+	local model=nn.Sequential();
+	model:add(nn.SpatialConvolution(1,64,5,5));
+	model:add(nn.ReLU());
+	model:add(nn.SpatialMaxPooling(2,2));
+	model:add(nn.SpatialConvolution(64,128,5,5));
+	model:add(nn.ReLU());
+	model:add(nn.SpatialMaxPooling(2,2));
+	model:add(nn.SpatialConvolution(128,256,5,5));
+	model:add(nn.ReLU());
+	model:add(nn.SpatialAveragePooling(2,2));
+	model:add(nn.View(16*16*256));
+	model:add(nn.Linear(16*16*256,300));
+	model:add(nn.Dropout(0.5));
+	model:add(nn.Linear(300,num_out));
+	model:add(nn.SoftMax());
+	model=initializeKhorrami(model,{0.2,1.2});
+	model:clearState();
+	torch.save(out_file,model);
+
+end
+
+function main()
+	local num_out=6;
+	local out_file='../models/base_khorrami_model_'..num_out..'.dat'
+	createBaseKhorramiModel(out_file,num_out);
+	local model=torch.load(out_file);
+	print (model);
+end
+
+main();
