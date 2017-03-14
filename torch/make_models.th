@@ -81,15 +81,15 @@ function createBaseKhorramiModel(out_file,num_out)
 	model:add(nn.Linear(16*16*256,300));
 	model:add(nn.Dropout(0.5));
 	model:add(nn.Linear(300,num_out));
-	model:add(nn.SoftMax());
-	model=initializeKhorrami(model,{0.2,1.2});
+	-- model:add(nn.LogSoftMax());
+	model=makeXavierGaussian(model,{0.2,1.2});
 	model:clearState();
 	torch.save(out_file,model);
 
 end
 
 function main()
-	local num_out=6;
+	local num_out=8;
 	local out_file='../models/base_khorrami_model_'..num_out..'.dat'
 	createBaseKhorramiModel(out_file,num_out);
 	local model=torch.load(out_file);

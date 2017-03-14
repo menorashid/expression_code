@@ -36,6 +36,11 @@ def mkdir(dir_curr):
     if not os.path.exists(dir_curr):
         os.mkdir(dir_curr);
 
+def makedirs(dir_curr):
+    if not os.path.exists(dir_curr):
+        os.makedirs(dir_curr);
+
+
 def getIndexingArray(big_array,small_array):
     small_array=np.array(small_array);
     big_array=np.array(big_array);

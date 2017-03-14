@@ -1,0 +1,110 @@
+require 'image'
+npy4th = require 'npy4th'
+require 'data_face';
+require 'cunn'
+require 'cudnn'
+require 'nn';
+require 'optim'
+require 'torchx';
+require 'gnuplot';
+dump=require 'dump';
+visualize=require 'visualize';
+
+function processIm(img_face,rand)
+		angles={-20,20};
+		pixel_augment={0.5,1.5};
+		scale={0.75,1.25};
+		translate={-15,15};
+        img_face:mul(255);
+
+        -- if img_face:size(2)~=self.input_size[1] then 
+        --     img_face = image.scale(img_face,self.input_size[1],self.input_size[2]);
+        -- end
+
+        -- img_face=torch.cdiv((img_face-self.mean_im),self.std_im);
+        -- img_face=img_face-self.mean_im;
+        -- if self.augmentation then
+        
+        -- local rand=math.random(5);
+
+        local rand=math.random(2);
+        if rand==1 then
+            image.hflip(img_face,img_face);
+        end
+        rand=math.random(2);
+        if rand==1 then
+        	-- rotate
+			local angle = math.random(angles[1],angles[2])
+			print ('angle',angle);
+			angle=math.rad(angle)
+			img_face=image.rotate(img_face,angle,"bilinear");
+		end
+		rand=math.random(2);
+		if rand==1 then
+			-- translate
+			local x_translate=math.random(translate[1],translate[2])
+			print ('x_translate',x_translate);
+			local y_translate=math.random(translate[1],translate[2])
+			print ('y_translate',y_translate);
+			img_face = image.translate(img_face, x_translate, y_translate);
+		end
+		rand=math.random(2);
+		if rand==1 then
+			-- scale
+			local scale_curr = (math.random()*(scale[2]-scale[1]))+scale[1]
+			scale_curr=0.9;
+			print ('scale_curr',scale_curr);
+			-- img_face_new=torch.zeros(img_face:size());
+			local img_face_sc=image.scale(img_face,'*'..scale_curr);
+			print (img_face:size());
+			if scale_curr<1 then
+				local pos=math.floor((img_face:size(2)-img_face_sc:size(2))/2)+1
+				print ('pos',pos);
+				print ('img_face_sc:size()',img_face_sc:size())
+				print ('img_face:size()',img_face:size())
+				img_face=torch.zeros(img_face:size());
+				-- print (img_face[{{},{pos,pos+img_face_sc:size(2)},{pos,pos+img_face_sc:size(2)}}]:size());
+				img_face[{{},{pos,pos+img_face_sc:size(2)-1},{pos,pos+img_face_sc:size(2)-1}}]=img_face_sc;
+			else
+				local pos=math.floor((img_face_sc:size(2)-img_face:size(2))/2)+1
+				print ('pos',pos);
+				print ('img_face_sc:size()',img_face_sc:size())
+				print ('img_face:size()',img_face:size())
+				img_face=torch.zeros(img_face:size());
+				img_face=img_face_sc[{1,{pos,pos+img_face:size(2)-1},{pos,pos+img_face:size(2)-1}}];
+				
+			end
+			-- img_face=img_face_new;
+		end
+		rand=math.random(2);
+		if rand==1 then
+			-- pixel augment
+			-- local pixel_augment_curr=math.random(pixel_augment[1],pixel_augment[2]);
+			local pixel_augment_curr = (math.random()*(pixel_augment[2]-pixel_augment[1]))+pixel_augment[1]
+			print ('pixel_augment_curr',pixel_augment_curr);
+			img_face=img_face*pixel_augment_curr;
+		end
+        -- end
+
+        return img_face
+end
+
+function main()
+	local img_path='../data/ck_96/im/S010/002/S010_002_00000001.png';
+	local out_dir='../scratch/test_augmentation';
+	local img=image.load(img_path);
+	local in_img_path=paths.concat(out_dir,'0.png');
+	math.randomseed(os.time())
+	image.save(in_img_path,img);
+	for i=1,5 do
+		print (i);
+		local img_new=processIm(img:clone(),i);
+		img_new:div(255);
+		local out_img_path=paths.concat(out_dir,i..'.png');
+		image.save(out_img_path,img_new);
+	end
+
+end
+
+
+main();
