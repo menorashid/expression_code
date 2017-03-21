@@ -14,11 +14,16 @@ do
 
         self.start_idx_face=1;
         self.input_size={96,96};
-        self.angles={-20,20};
-        self.pixel_augment={0.5,1.5};
-        self.scale={0.75,1.25};
-        self.translate={-10,10};
         
+        self.angles={-5,5};
+        self.pixel_augment={0.5,1.5};
+        self.scale={0.7,1.4};
+        self.a_range = {0.25,4}
+        self.b_range = {0.7,1.4};
+        self.c_range = {-0.1,0.1};
+
+        self.out_dir_diff=args.out_dir_diff;
+        self.lines_face_diff={};
         -- if args.num_labels then
         --     self.num_labels=args.num_labels;
         -- else
@@ -49,6 +54,145 @@ do
         print (#self.lines_face);
     end
 
+    function data:unMean(mean,std)
+        if not mean then
+            mean=self.mean_im:view(1,self.mean_im:size(1),self.mean_im:size(2),self.mean_im:size(3));
+            mean=torch.repeatTensor(mean,self.training_set.data:size(1),1,1,1):type(self.training_set.data:type());
+        end
+        if not std then
+            std=self.std_im:view(1,self.std_im:size(1),self.std_im:size(2),self.std_im:size(3));
+            std=torch.repeatTensor(std,self.training_set.data:size(1),1,1,1):type(self.training_set.data:type());
+        end
+        local im =torch.cmul(self.training_set.data,std)+mean;
+        return im,mean,std
+    end 
+
+    function data:getGCamEtc(net,net_gb,layer_to_viz,batch_inputs,batch_targets)
+        net:zeroGradParameters();
+        net_gb:zeroGradParameters();
+
+        local outputs=net:forward(batch_inputs);
+        local outputs_gb= net_gb:forward(batch_inputs);
+
+        local scores, pred_labels = torch.max(outputs, 2);
+        pred_labels = pred_labels:type(batch_targets:type());
+        pred_labels = pred_labels:view(batch_targets:size());
+
+        local doutput_pred = utils.create_grad_input_batch(net.modules[#net.modules], pred_labels)
+        local gcam_pred = utils.grad_cam_batch(net, layer_to_viz, doutput_pred);
+        net:zeroGradParameters();
+        local doutput_gt =  utils.create_grad_input_batch(net.modules[#net.modules], batch_targets)
+        local gcam_gt = utils.grad_cam_batch(net, layer_to_viz, doutput_gt);
+
+        local gb_viz_pred = net_gb:backward(batch_inputs, doutput_pred)
+        net_gb:zeroGradParameters();
+        local gb_viz_gt = net_gb:backward(batch_inputs, doutput_gt)
+        return {gcam_pred,gcam_gt},{gb_viz_pred,gb_viz_gt},pred_labels;
+        
+    end
+
+    function data:saveDifficultImages(net,net_gb,layer_to_viz,activation_thresh,conv_size)
+        -- set augmentation off;
+        local aug_org=self.augmentation;
+        self.augmentation=false;
+        -- empty difficult face lines;
+        self.lines_face_diff={};
+        -- set nets
+        local train_state=net.train;
+        net:evaluate();
+        net_gb:evaluate();
+
+        -- loop and save images;
+        local epoch=math.ceil(#self.lines_face/self.batch_size);
+        local rem= epoch*self.batch_size - #self.lines_face;
+        print ('epoch',epoch);
+        print ('rem',rem);
+
+        local mean,std;
+        -- local counter =0;
+        local gauss_big = image.gaussian(2*conv_size+1,2*conv_size+1):float();
+        local gauss =  image.gaussian(conv_size,conv_size):float();
+        for epoch_num=1,epoch do
+            self:getTrainingData();
+            local batch_inputs=self.training_set.data:cuda();
+            local batch_targets=self.training_set.label:cuda();
+            local gcam_all,gb_viz_all,pred_labels = self:getGCamEtc(net,net_gb,layer_to_viz,batch_inputs,batch_targets);
+
+            local im;
+            if not mean then
+                im,mean,std = self:unMean();
+            else
+                assert (std)
+                im=self:unMean(mean,std);
+            end
+            
+            for im_num=1,batch_targets:size(1) do
+                
+                if (epoch_num-1)*self.batch_size +im_num > #self.lines_face then
+                    break;
+                end
+
+                if pred_labels[im_num]==batch_targets[im_num] then
+                    local gb_viz=gb_viz_all[1][im_num][1]:float();
+                    local gcam=gcam_all[1][im_num][1]:float();
+                    local im_org=im[im_num][1]:div(255):float();
+                    local path_org=self.training_set.input[im_num];
+                    gcam=image.scale(gcam, self.input_size[1], self.input_size[2]);
+                    local gb_gcam=torch.cmul(gcam,gb_viz);                  
+                    -- gb_gcam=torch.sum(gb_gcam,1);
+                    gb_gcam=torch.abs(gb_gcam);
+                    gb_gcam=gb_gcam-torch.min(gb_gcam);
+                    gb_gcam:div(torch.max(gb_gcam));
+                    local im_g = image.convolve(im_org,gauss_big,'same');
+                        -- torch.ones(2*conv_size,2*conv_size):float(),'same');
+                    im_g:div(torch.max(im_g));
+
+                    local gb_gcam_vals=torch.sort(gb_gcam:view(-1),1,true);
+                    local idx=math.floor(gb_gcam_vals:size(1)*activation_thresh);
+                    local gb_gcam_th =torch.zeros(gb_gcam:size()):type(gb_gcam:type());
+                    gb_gcam_th[gb_gcam:ge(gb_gcam_vals[idx])]=1;
+                    gb_gcam_th = image.convolve(gb_gcam_th,gauss,'same');
+                        -- torch.ones(conv_size,conv_size):float(),'same');
+                    gb_gcam_th:div(torch.max(gb_gcam_th));
+                    gb_gcam_th[gb_gcam_th:gt(0.5)]=1;
+
+                    local im_blur=torch.cmul(gb_gcam_th,im_g)+torch.cmul((1-gb_gcam_th),im_org);
+                    local out_file_blur = paths.concat(self.out_dir_diff,paths.basename(path_org));
+                    image.save(out_file_blur,image.toDisplayTensor(im_blur));
+                    self.lines_face_diff[#self.lines_face_diff+1]=out_file_blur..' '..batch_targets[im_num]-1;
+                end
+            end
+        end
+
+        -- get rid of repeated images 
+        if #self.lines_face_diff~=#self.lines_face then
+            local lines_face=self.lines_face_diff;
+            self.lines_face_diff={};
+
+            for i=1,#self.lines_face do
+                self.lines_face_diff[#self.lines_face_diff+1]=lines_face[i];
+            end
+        end
+
+        -- set augmentation back;
+        self.augmentation=aug_org;
+
+        -- shuffle lines_diff if needed
+        if self.augmentation then
+            self.lines_face_diff=self:shuffleLines(self.lines_face_diff);
+        end
+        -- set nets back
+        if train_state then
+            net:training();
+            net_gb:training();
+        end
+
+        -- print (#self.lines_face_diff);
+        -- for i=1,10 do
+        --     print (self.lines_face_diff[i]);
+        -- end
+
+    end
 
     function data:shuffleLines(lines)
         local x=lines;
@@ -106,7 +250,7 @@ do
     
 
     function data:processIm(img_face)
-        img_face:mul(255);
+        
 
         if img_face:size(2)~=self.input_size[1] then 
             img_face = image.scale(img_face,self.input_size[1],self.input_size[2]);
@@ -116,50 +260,41 @@ do
         -- img_face=img_face-self.mean_im;
         if self.augmentation then
             local rand=math.random(2);
-            -- local rand=1;
             if rand==1 then
                 image.hflip(img_face,img_face);
             end
+            
+            local angle_deg = (math.random()*(self.angles[2]-self.angles[1]))+self.angles[1]
+            local angle=math.rad(angle_deg)
+            img_face=image.rotate(img_face,angle,"bilinear");
 
-            rand=math.random(2);
-            if rand==1 then
-                local pixel_augment_curr = (math.random()*(self.pixel_augment[2]-self.pixel_augment[1]))+self.pixel_augment[1]
-                img_face=img_face*pixel_augment_curr;
+            local alpha = (math.random()*(self.scale[2]-self.scale[1]))+self.scale[1]
+            local img_face_sc=image.scale(img_face,'*'..alpha);
+            if alpha<1 then
+                local pos=math.floor((img_face:size(2)-img_face_sc:size(2))/2)+1
+                img_face=torch.zeros(img_face:size());
+                img_face[{{},{pos,pos+img_face_sc:size(2)-1},{pos,pos+img_face_sc:size(2)-1}}]=img_face_sc;
+            else
+                local pos=math.floor((img_face_sc:size(2)-img_face:size(2))/2)+1
+                img_face=torch.zeros(img_face:size());
+                img_face=img_face_sc[{1,{pos,pos+img_face:size(2)-1},{pos,pos+img_face:size(2)-1}}];
             end
+            -- print (alpha,img_face_sc:size(2));
 
-            rand=math.random(2);
-            if rand==1 then
-                local angle = math.random(self.angles[1],self.angles[2])
-                angle=math.rad(angle)
-                img_face=image.rotate(img_face,angle,"bilinear");
-            end
+            local delta = math.floor(torch.abs(alpha-1)*self.input_size[1]);
+            local x_translate=math.random(-delta,delta)
+            local y_translate=math.random(-delta,delta)
+            img_face = image.translate(img_face, x_translate, y_translate);
+            -- print (alpha,delta,x_translate,y_translate);
 
-            rand=math.random(2);
-            if rand==1 then
-                -- translate
-                local x_translate=math.random(self.translate[1],self.translate[2])
-                local y_translate=math.random(self.translate[1],self.translate[2])
-                img_face = image.translate(img_face, x_translate, y_translate);
-            end
-        
-            rand=math.random(2);
-            if rand==1 then
-                -- scale
-                local scale_curr = (math.random()*(self.scale[2]-self.scale[1]))+self.scale[1]
-                local img_face_sc=image.scale(img_face,'*'..scale_curr);
-                if scale_curr<1 then
-                    local pos=math.floor((img_face:size(2)-img_face_sc:size(2))/2)+1
-                    img_face=torch.zeros(img_face:size());
-                    img_face[{{},{pos,pos+img_face_sc:size(2)-1},{pos,pos+img_face_sc:size(2)-1}}]=img_face_sc;
-                else
-                    local pos=math.floor((img_face_sc:size(2)-img_face:size(2))/2)+1
-                    img_face=torch.zeros(img_face:size());
-                    img_face=img_face_sc[{1,{pos,pos+img_face:size(2)-1},{pos,pos+img_face:size(2)-1}}];
-
-                end
-            end
+            local a=(math.random()*(self.a_range[2]-self.a_range[1]))+self.a_range[1];
+            local b=(math.random()*(self.b_range[2]-self.b_range[1]))+self.b_range[1];
+            local c=(math.random()*(self.c_range[2]-self.c_range[1]))+self.c_range[1];
+            img_face = (torch.pow(img_face,a)*b) +c
+            -- print (a,b,c);
         end
 
+        img_face:mul(255);
         img_face=torch.cdiv((img_face-self.mean_im),self.std_im);
 
         return img_face

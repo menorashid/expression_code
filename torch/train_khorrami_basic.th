@@ -99,7 +99,7 @@ function test(params)
     logger:writeString(dump.tostring('loading network')..'\n');
     -- print ('loading network');
 
-    local net=torch.load(params.model);
+    local net=torch.load(params.modelTest);
 
     logger:writeString(dump.tostring('done loading network')..'\n');
     -- print ('done loading network');
@@ -175,7 +175,7 @@ end
 
 
 function testGlobal()
-    local model_pre={'../experiments/khorrami_basic','final/model_all_final.dat'};
+    local model_pre={'../experiments/khorrami_basic_aug_fix_resume_again','final/model_all_final.dat'};
     local test_path_pre={'../data/ck_96/train_test_files/test_','.txt'};
     local mean_path_pre={'../data/ck_96/train_test_files/train_','_mean.png'};
     local std_path_pre={'../data/ck_96/train_test_files/train_','_std.png'};
@@ -187,6 +187,7 @@ function testGlobal()
     for fold_num=0,num_folds-1 do
         local model_path=paths.concat(model_pre[1],fold_num,model_pre[2]);
         local net=torch.load(model_path):cuda();
+        net:evaluate();
         local val_data_path=test_path_pre[1]..fold_num..test_path_pre[2];
         local mean_im_path=mean_path_pre[1]..fold_num..mean_path_pre[2];
         local std_im_path=std_path_pre[1]..fold_num..std_path_pre[2];
@@ -427,10 +428,10 @@ cmd:option('-mean_im_path','../data/ck_96/train_test_files/train_0_mean.png');
 cmd:option('-std_im_path','../data/ck_96/train_test_files/train_0_std.png');
 
 cmd:option('-limit',-1,'num of training data to read');
-cmd:option('-iterations',70*epoch_size,'num of iterations to run');
-cmd:option('-saveAfter',5*epoch_size,'num of iterations after which to save model');
+cmd:option('-iterations',2000,'num of iterations to run');
+cmd:option('-saveAfter',500,'num of iterations after which to save model');
 cmd:option('-batchSize',64,'batch size');
-cmd:option('-testAfter',5*epoch_size,'num iterations after which to get validation loss');
+cmd:option('-testAfter',2*epoch_size,'num iterations after which to get validation loss');
 cmd:option('-dispAfter',1,'num iterations after which to display training loss');
 cmd:option('-dispPlotAfter',2*epoch_size,'num iterations after which to display training loss');
 
@@ -448,14 +449,17 @@ cmd:option('augmentation' , true);
 
 cmd:option('-gpu',1,'gpu to run the training on');
 
-cmd:option('-outDir','/home/SSD3/maheen-data/expression_project/khorrami_basic/fold_0_nw');
+cmd:option('-outDir','/home/SSD3/maheen-data/expression_project/scratch/train_aug_fix/0');
+cmd:option('-modelTest','/home/SSD3/maheen-data/expression_project/scratch/train_aug_fix/0/final/model_all_final.dat');
+
+
 params = cmd:parse(arg)
--- main(params);    
+main(params);    
 
 -- cmd:option('-iterations',1,'num of iterations to run');
 -- cmd:option('-batchSize',132,'batch size');
+
 cmd:option('-outDirTest',paths.concat(params.outDir,'test_images'));
-cmd:option('-model',paths.concat(params.outDir,'final/model_all_final.dat'));
 params = cmd:parse(arg)
--- test(params);
-testGlobal();
+test(params);
+-- testGlobal();

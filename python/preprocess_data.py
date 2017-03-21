@@ -240,16 +240,18 @@ def scratch():
     np.save(weights_file,balanced_weights);
 
 def main():
-    out_dir_meta='../experiments/khorrami_basic';
+    experiment_name='khorrami_basic_aug_fix_resume_again';
+    out_dir_meta='../experiments/'+experiment_name;
     util.mkdir(out_dir_meta);
-    out_script='../scripts/train_khorrami_basic.sh';
+    out_script='../scripts/train_'+experiment_name+'.sh';
     path_to_th='train_khorrami_basic.th';
 
     dir_files='../data/ck_96/train_test_files';
+    resume_dir_meta='../experiments/khorrami_basic_aug_fix_resume'
     num_folds=10;
 
     commands=[];
-    print '{',
+    # print '{',
     for fold_num in range(num_folds):
         
         
@@ -261,17 +263,21 @@ def main():
         batchSize=64;
         epoch_size=len(util.readLinesFromFile(data_path))/batchSize;
         batchSizeTest=len(util.readLinesFromFile(val_data_path));
-        print str(batchSizeTest)+',',
+        # print str(batchSizeTest)+',',
 
         outDir=os.path.join(out_dir_meta,str(fold_num));
 
         command=['th',path_to_th];
+        if resume_dir_meta is not None:
+            model_path_resume=os.path.join(resume_dir_meta,str(fold_num),'final','model_all_final.dat');
+            command = command+['-model',model_path_resume];            
+
         command = command+['-mean_im_path',mean_im_path];
         command = command+['-std_im_path',std_im_path];
         command = command+['-batchSize',batchSize];
 
-        command = command+['-iterations',75*epoch_size];
-        command = command+['-saveAfter',5*epoch_size];
+        command = command+['-iterations',250*epoch_size];
+        command = command+['-saveAfter',10*epoch_size];
         command = command+['-testAfter',5*epoch_size];
         command = command+['-dispAfter',1];
         command = command+['-dispPlotAfter',5*epoch_size];
@@ -283,13 +289,14 @@ def main():
         command = command+['-batchSizeTest',batchSizeTest];
         
         command = command+['-outDir',outDir];
-        
+        command = command+['-modelTest',os.path.join(outDir,'final','model_all_final.dat')];
         command = [str(c_curr) for c_curr in command];
         command=' '.join(command);
-
+        print command;
         commands.append(command);
-    print '}';
-    # util.writeFile(out_script,commands);
+    # print '}';
+    print out_script
+    util.writeFile(out_script,commands);
 
 
 
