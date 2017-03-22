@@ -215,7 +215,142 @@ function main(params)
 
 
     collectgarbage();
+end
 
+function testTwoListData(params)
+    print ('setting_threads');
+    torch.setnumthreads(1);
+	local out_dir=params.outDir
+    local net_file=params.model
+    if params.limit<0 then
+    	params.limit=nil;
+    end
+    
+    paths.mkdir(out_dir);
+    local out_dir_intermediate=paths.concat(out_dir,'images');
+    paths.mkdir(out_dir_intermediate);
+    local out_file_log=paths.concat(out_dir_intermediate,'log.txt');
+    local out_file_pred_labels_post='_pred_labels.npy';
+
+    local logger=torch.DiskFile(out_file_log,'w');
+
+    logger:writeString(dump.tostring(params)..'\n');
+    print (params);
+
+    cutorch.setDevice(params.gpu);
+
+
+    logger:writeString(dump.tostring('loading network')..'\n');
+    print ('loading network');
+    local net = torch.load(net_file);
+    -- net:remove(#net);
+    -- net:remove(12);
+    logger:writeString(dump.tostring('done loading network')..'\n');
+    print ('done loading network');
+    print (net);
+
+    logger:writeString(dump.tostring('making cuda')..'\n');
+    print ('making cuda');
+    net = net:cuda();
+    logger:writeString(dump.tostring('done')..'\n');
+    print ('done');
+
+    logger:writeString(dump.tostring('loading params')..'\n');
+    print ('loading params');
+    local parameters, gradParameters = net:parameters()
+    logger:writeString(dump.tostring('loading done')..'\n');
+    print ('loading done');
+    data_params={file_path=params.val_data_path,
+                batch_size=params.batchSizeTest,
+                mean_file=params.mean_im_path,
+                std_file=params.std_im_path,
+                augmentation=false,
+                limit=params.limit};
+	vd=data_face(data_params);
+
+	local val_losses={};
+	local val_losses_iter={};
+
+	local net_gb= net:clone();
+	net_gb:replace(utils.guidedbackprop);
+	net_gb:evaluate();
+	net_gb=net_gb:cuda();
+	net:evaluate();
+	
+    local out_dir_diff=paths.concat(params.outDir,'diff_im_1');
+    paths.mkdir(out_dir_diff);
+	local data_params={file_path=params.val_data_path,
+                batch_size=64,
+                mean_file=params.mean_im_path,
+                std_file=params.std_im_path,
+                augmentation=false,
+                limit=params.limit,
+                out_dir_diff=out_dir_diff
+                };
+	local vd=data_face(data_params);
+	-- print ('getTrainingData plain');
+	-- vd:getTrainingData();
+	print ('saving difficult');
+	vd:saveDifficultImages(net,net_gb,params.layer_to_viz,0.05,5,logger);
+	-- print ('getTrainingData plain');
+	-- vd:getTrainingData();
+	print ('getTrainingData 0.5');
+	vd:getTrainingData(0.5);
+	print ('getTrainingData 1');
+	vd:getTrainingData(1);
+	local batch_targets=vd.training_set.label:cuda();
+   	local outputs = net:forward(vd.training_set.data:cuda());
+   	local scores, pred_labels = torch.max(outputs, 2);
+	pred_labels = pred_labels:type(batch_targets:type());
+    pred_labels = pred_labels:view(batch_targets:size());
+    local loss = torch.sum(batch_targets:eq(pred_labels))/batch_targets:nElement();
+    print (loss);
+
+
+
+	local out_file_pre = paths.concat(params.outDir,'viz_batch');
+	paths.mkdir(out_file_pre);
+	local batch_inputs=vd.training_set.data;
+	print (batch_inputs:size())
+    local inputs_org=unMean(batch_inputs,vd.mean_im,vd.std_im):div(255):float();
+    for im_num=1,inputs_org:size(1) do
+		local out_file_org=paths.concat(out_file_pre,im_num..'_org.jpg');
+    	image.save(out_file_org, image.toDisplayTensor(inputs_org[im_num][1]))
+   	end
+
+
+	print ('getTrainingData 0');
+	vd:getTrainingData(0);
+	local batch_targets=vd.training_set.label:cuda();
+   	local outputs = net:forward(vd.training_set.data:cuda());
+   	local scores, pred_labels = torch.max(outputs, 2);
+	pred_labels = pred_labels:type(batch_targets:type());
+    pred_labels = pred_labels:view(batch_targets:size());
+    local loss = torch.sum(batch_targets:eq(pred_labels))/batch_targets:nElement();
+    print (loss);
+
+
+	-- local out_file_pre = paths.concat(params.outDir,'viz_batch');
+	-- paths.mkdir(out_file_pre);
+	-- local batch_inputs=vd.training_set.data;
+
+ --    local inputs_org=unMean(batch_inputs,vd.mean_im,vd.std_im):div(255):float();
+ --    for im_num=1,inputs_org:size(1) do
+	-- 	local out_file_org=paths.concat(out_file_pre,im_num..'_org.jpg');
+ --    	image.save(out_file_org, image.toDisplayTensor(inputs_org[im_num][1]))
+ --   	end
+
+ --   	local batch_targets=vd.training_set.label:cuda();
+ --   	local outputs = net:forward(vd.training_set.data:cuda());
+ --   	local scores, pred_labels = torch.max(outputs, 2);
+	-- pred_labels = pred_labels:type(batch_targets:type());
+ --    pred_labels = pred_labels:view(batch_targets:size());
+ --    local loss = torch.sum(batch_targets:eq(pred_labels))/batch_targets:nElement();
+ --    print loss;
+
+    
+
+    collectgarbage();
 end
 
 
@@ -228,10 +363,10 @@ cmd:text('Options')
 local epoch_size=18;
 -- 56;
 
--- cmd:option('-model','../experiments/khorrami_basic_aug_fix_resume_again/0/final/model_all_final.dat');
--- cmd:option('-outDir','../scratch/test_grad_cam/10');
-cmd:option('-model','/home/SSD3/maheen-data/expression_project/scratch/train_aug_fix/0/intermediate/model_all_500.dat');
-cmd:option('-outDir','../scratch/test_grad_cam/11');
+cmd:option('-model','../experiments/khorrami_basic_aug_fix_resume_again/0/final/model_all_final.dat');
+cmd:option('-outDir','../scratch/test_grad_cam/10');
+-- cmd:option('-model','/home/SSD3/maheen-data/expression_project/scratch/train_aug_fix/0/intermediate/model_all_500.dat');
+-- cmd:option('-outDir','../scratch/test_grad_cam/11');
 cmd:option('-mean_im_path','../data/ck_96/train_test_files/train_0_mean.png');
 cmd:option('-std_im_path','../data/ck_96/train_test_files/train_0_std.png');
 
@@ -248,4 +383,5 @@ cmd:option('-layer_to_viz',8,'gpu to run the training on');
 
 
 params = cmd:parse(arg)
-main(params);    
+-- main(params);    
+testTwoListData(params)

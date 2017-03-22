@@ -14,6 +14,7 @@ do
 
         self.start_idx_face=1;
         self.input_size={96,96};
+
         
         self.angles={-5,5};
         self.pixel_augment={0.5,1.5};
@@ -23,7 +24,11 @@ do
         self.c_range = {-0.1,0.1};
 
         self.out_dir_diff=args.out_dir_diff;
+        self.start_idx_face_blur=1;
+        self.ratio_blur=args.ratio_blur;
+
         self.lines_face_diff={};
+
         -- if args.num_labels then
         --     self.num_labels=args.num_labels;
         -- else
@@ -51,6 +56,9 @@ do
                 self.lines_face[#self.lines_face+1]=lines_face[i];
             end
         end
+        
+        self.lines_face_diff=self.lines_face;
+
         print (#self.lines_face);
     end
 
@@ -91,9 +99,12 @@ do
         
     end
 
-    function data:saveDifficultImages(net,net_gb,layer_to_viz,activation_thresh,conv_size)
-        -- set augmentation off;
+    function data:saveDifficultImages(net,net_gb,layer_to_viz,activation_thresh,conv_size,logger)
+        -- set augmentation off; set start idx;
         local aug_org=self.augmentation;
+        local start_idx_face_org = self.start_idx_face;
+
+        self.start_idx_face = 1;
         self.augmentation=false;
         -- empty difficult face lines;
         self.lines_face_diff={};
@@ -105,15 +116,18 @@ do
         -- loop and save images;
         local epoch=math.ceil(#self.lines_face/self.batch_size);
         local rem= epoch*self.batch_size - #self.lines_face;
-        print ('epoch',epoch);
-        print ('rem',rem);
 
         local mean,std;
-        -- local counter =0;
         local gauss_big = image.gaussian(2*conv_size+1,2*conv_size+1):float();
         local gauss =  image.gaussian(conv_size,conv_size):float();
         for epoch_num=1,epoch do
-            self:getTrainingData();
+            if logger then
+                local disp_str=string.format("saving blur images iter "..epoch_num .." of "..epoch .." "..activation_thresh)
+                print (disp_str);
+                logger:writeString(dump.tostring(disp_str)..'\n');
+            end
+
+            self:getTrainingData(0);
             local batch_inputs=self.training_set.data:cuda();
             local batch_targets=self.training_set.label:cuda();
             local gcam_all,gb_viz_all,pred_labels = self:getGCamEtc(net,net_gb,layer_to_viz,batch_inputs,batch_targets);
@@ -132,9 +146,9 @@ do
                     break;
                 end
 
-                if pred_labels[im_num]==batch_targets[im_num] then
-                    local gb_viz=gb_viz_all[1][im_num][1]:float();
-                    local gcam=gcam_all[1][im_num][1]:float();
+                -- if pred_labels[im_num]==batch_targets[im_num] then
+                    local gb_viz=gb_viz_all[2][im_num][1]:float();
+                    local gcam=gcam_all[2][im_num][1]:float();
                     local im_org=im[im_num][1]:div(255):float();
                     local path_org=self.training_set.input[im_num];
                     gcam=image.scale(gcam, self.input_size[1], self.input_size[2]);
@@ -159,38 +173,35 @@ do
                     local im_blur=torch.cmul(gb_gcam_th,im_g)+torch.cmul((1-gb_gcam_th),im_org);
                     local out_file_blur = paths.concat(self.out_dir_diff,paths.basename(path_org));
                     image.save(out_file_blur,image.toDisplayTensor(im_blur));
-                    self.lines_face_diff[#self.lines_face_diff+1]=out_file_blur..' '..batch_targets[im_num]-1;
-                end
+                    self.lines_face_diff[#self.lines_face_diff+1]={out_file_blur,''..batch_targets[im_num]-1};
+                -- end
             end
         end
 
         -- get rid of repeated images 
-        if #self.lines_face_diff~=#self.lines_face then
-            local lines_face=self.lines_face_diff;
-            self.lines_face_diff={};
+        -- if #self.lines_face_diff~=#self.lines_face then
+        --     local lines_face=self.lines_face_diff;
+        --     self.lines_face_diff={};
 
-            for i=1,#self.lines_face do
-                self.lines_face_diff[#self.lines_face_diff+1]=lines_face[i];
-            end
-        end
+        --     for i=1,#self.lines_face do
+        --         self.lines_face_diff[#self.lines_face_diff+1]=lines_face[i];
+        --     end
+        -- end
 
-        -- set augmentation back;
+        -- set augmentation back and start idx back;
         self.augmentation=aug_org;
-
+        self.start_idx_face = start_idx_face_org;
+        self.start_idx_face_blur=1;
         -- shuffle lines_diff if needed
         if self.augmentation then
             self.lines_face_diff=self:shuffleLines(self.lines_face_diff);
         end
+        print (#self.lines_face_diff)
         -- set nets back
         if train_state then
             net:training();
             net_gb:training();
         end
-
-        -- print (#self.lines_face_diff);
-        -- for i=1,10 do
-        --     print (self.lines_face_diff[i]);
-        -- end
 
     end
 
@@ -207,22 +218,48 @@ do
         return lines2;
     end
 
-    function data:getTrainingData()
+    function data:getTrainingData(ratio_blur)
+        
+        if not ratio_blur then
+            if self.ratio_blur then
+                ratio_blur=self.ratio_blur;
+            else
+                ratio_blur=0;
+            end
+        end
+
+        local num_blur=math.min(math.ceil(self.batch_size*ratio_blur),#self.lines_face_diff);
+        local start_blur=self.batch_size-num_blur;
+        -- print ('ratio_blur',ratio_blur,'num_blur',num_blur,'start_blur',start_blur);
+        -- print ('sizes of lists',#self.lines_face,#self.lines_face_diff);
+
         local start_idx_face_before = self.start_idx_face
+        local start_idx_face_blur_before = self.start_idx_face_blur;
+        -- print ('start_idx_face_before,start_idx_face_blur_before',start_idx_face_before,start_idx_face_blur_before);
 
         self.training_set.data=torch.zeros(self.batch_size,1,self.input_size[1]
             ,self.input_size[2]);
         self.training_set.label=torch.zeros(self.batch_size);
         self.training_set.input={};
         
-        self.start_idx_face=self:addTrainingData(self.training_set,self.batch_size,
-            self.lines_face,self.start_idx_face)    
+        self.start_idx_face=self:addTrainingData(self.training_set,start_blur,
+            self.lines_face,self.start_idx_face,1)    
+
+        -- print ('self.batch_size,self.lines_face_diff,self.start_idx_face_blur,start_blur+1',
+            -- self.batch_size,#self.lines_face_diff,self.start_idx_face_blur,start_blur+1)
+        self.start_idx_face_blur=self:addTrainingData(self.training_set,self.batch_size,
+            self.lines_face_diff,self.start_idx_face_blur,start_blur+1)
         
-        
+        -- print ('start_idx_face,start_idx_face_blur',self.start_idx_face,self.start_idx_face_blur);
 
         if self.start_idx_face<start_idx_face_before and self.augmentation then
-            print ('shuffling data'..self.start_idx_face..' '..start_idx_face_before )
+            -- print ('shuffling data'..self.start_idx_face..' '..start_idx_face_before )
             self.lines_face=self:shuffleLines(self.lines_face);
+        end
+
+        if self.start_idx_face_blur<start_idx_face_blur_before and self.augmentation then
+            -- print ('shuffling data blur'..self.start_idx_face_blur..' '..start_idx_face_blur_before )
+            self.lines_face_diff=self:shuffleLines(self.lines_face_diff);
         end
 
     end
@@ -300,10 +337,14 @@ do
         return img_face
     end
 
-    function data:addTrainingData(training_set,batch_size,lines_face,start_idx_face)
+    function data:addTrainingData(training_set,batch_size,lines_face,start_idx_face,curr_idx)
         local list_idx=start_idx_face;
         local list_size=#lines_face;
-        local curr_idx=1;
+        -- local 
+        if not curr_idx then
+            curr_idx=1;
+        end
+
         while curr_idx<= batch_size do
             local img_path_face=lines_face[list_idx][1];
             local label_face=lines_face[list_idx][2];
