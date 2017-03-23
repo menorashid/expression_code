@@ -165,10 +165,12 @@ do
                     local idx=math.floor(gb_gcam_vals:size(1)*activation_thresh);
                     local gb_gcam_th =torch.zeros(gb_gcam:size()):type(gb_gcam:type());
                     gb_gcam_th[gb_gcam:ge(gb_gcam_vals[idx])]=1;
+                    gb_gcam_th[gb_gcam:le(gb_gcam_vals[idx])]=0;
                     gb_gcam_th = image.convolve(gb_gcam_th,gauss,'same');
                         -- torch.ones(conv_size,conv_size):float(),'same');
                     gb_gcam_th:div(torch.max(gb_gcam_th));
-                    gb_gcam_th[gb_gcam_th:gt(0.5)]=1;
+                    -- gb_gcam_th[gb_gcam_th:gt(0.5)]=1;
+
 
                     local im_blur=torch.cmul(gb_gcam_th,im_g)+torch.cmul((1-gb_gcam_th),im_org);
                     local out_file_blur = paths.concat(self.out_dir_diff,paths.basename(path_org));

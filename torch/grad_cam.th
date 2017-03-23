@@ -21,6 +21,15 @@ function unMean(training_data,mean,std)
 	return training_data;
 end	
 
+function meanIt(training_data,mean,std)
+	local mean=mean:view(1,mean:size(1),mean:size(2),mean:size(3));
+	local std=std:view(1,std:size(1),std:size(2),std:size(3));
+	mean=torch.repeatTensor(mean,training_data:size(1),1,1,1):type(training_data:type());
+	std=torch.repeatTensor(std,training_data:size(1),1,1,1):type(training_data:type());
+	training_data=torch.cdiv(training_data-mean,std);
+	return training_data;
+end	
+
 function main(params) 
     print ('setting_threads');
     torch.setnumthreads(1);
@@ -93,7 +102,6 @@ function main(params)
     	net:zeroGradParameters();
     	net_gb:zeroGradParameters();
 	    local out_file_pred_labels=paths.concat(out_dir,i..out_file_pred_labels_post);
-		-- for emotion_to_viz=1,#emotions do
 		vd:getTrainingData();
 
 	    vd.training_set.data=vd.training_set.data:cuda();
@@ -112,13 +120,44 @@ function main(params)
 	    net:zeroGradParameters();
 	    local doutput_gt =	utils.create_grad_input_batch(net.modules[#net.modules], batch_targets)
 	    local gcam_gt = utils.grad_cam_batch(net, layer_to_viz, doutput_gt);
-	    print (doutput_pred:size());
 	    local gb_viz_pred = net_gb:backward(batch_inputs, doutput_pred)
 	    net_gb:zeroGradParameters();
 	    local gb_viz_gt = net_gb:backward(batch_inputs, doutput_gt)
 	    
-	    local inputs_org=unMean(batch_inputs,vd.mean_im,vd.std_im):div(255):float();
-	    local conv_size=5;
+	    local inputs_org=unMean(batch_inputs,vd.mean_im,vd.std_im):div(255);
+	    
+	    local conv_size=11;
+	    local gauss_big = image.gaussian({height=conv_size,width=conv_size,normalize=true}):cuda();
+	    local gauss_layer = nn.SpatialConvolution(1,1,conv_size,conv_size,
+	    										1,1,(conv_size-1)/2,(conv_size-1)/2):cuda();
+	    gauss_layer.weight=gauss_big:view(1,1,gauss_big:size(1),gauss_big:size(2)):clone()
+	    gauss_layer.bias:fill(0);
+	    
+	    conv_size=5;
+	    local gauss =  image.gaussian({height=conv_size,width=conv_size,normalize=true}):cuda();
+		local gauss_layer_small = nn.SpatialConvolution(1,1,conv_size,conv_size,
+	    										1,1,(conv_size-1)/2,(conv_size-1)/2):cuda();
+	    gauss_layer_small.weight = gauss:view(1,1,gauss:size(1),gauss:size(2)):clone()
+	    gauss_layer_small.bias:fill(0);
+	    
+	    local up_layer = nn.SpatialUpSamplingBilinear({oheight=inputs_org:size(3),owidth=inputs_org:size(4)}):cuda();
+
+        local min_layer = nn.Sequential();
+        min_layer:add(nn.View(-1):setNumInputDims(3));
+        min_layer:add(nn.Min(1,1));
+        min_layer:add(nn.View(1));
+        min_layer:add(nn.Replicate(inputs_org:size(3),2,3));
+        min_layer:add(nn.Replicate(inputs_org:size(4),3,3));
+        min_layer = min_layer:cuda();
+
+        local max_layer = min_layer:clone();
+        max_layer:remove(2);
+        max_layer:insert(nn.Max(1,1),2);
+        max_layer:cuda();
+        
+	    local inputs_blur=gauss_layer:forward(inputs_org);
+	    inputs_blur:cdiv(max_layer:forward(inputs_blur:csub(min_layer:forward(inputs_blur))));
+        local im_blur_all;
 	    for gt_pred=1,2 do
 	    	local gcam_curr;
 	    	local gb_viz_curr;
@@ -133,62 +172,79 @@ function main(params)
 	    		gb_viz_curr=gb_viz_gt;
 	    		out_file_post='_gt.jpg';
 	    	end
+	    	
+	    	gcam_curr = up_layer:forward(gcam_curr);
+	    	local gb_gcam_org_all = torch.cmul(gb_viz_curr,gcam_curr);
+	    	local gb_gcam_all = torch.abs(gb_gcam_org_all);
+	    	gb_gcam_all:cdiv(max_layer:forward(gb_gcam_all:csub(min_layer:forward(gb_gcam_all))));
+	    	
+	    	local gb_gcam_th_all =torch.zeros(gb_gcam_all:size()):type(gb_gcam_all:type());
+	    	local vals_all = gb_gcam_th_all:clone();
+	    	for im_num =1, inputs_org:size(1) do
+	    		local gb_gcam = gb_gcam_all[im_num][1];
+	    		local gb_gcam_vals = torch.sort(gb_gcam:view(-1),1,true);
+				local val = gb_gcam_vals[math.floor(gb_gcam_vals:size(1)*0.05)];
+				vals_all[im_num][1]:fill(val);
+	    	end
+	    	gb_gcam_th_all[gb_gcam_all:ge(vals_all)]=1;
+	    	gb_gcam_th_all[gb_gcam_all:lt(vals_all)]=0;
+	    	gb_gcam_th_all=gauss_layer_small:forward(gb_gcam_th_all);
+	    	gb_gcam_th_all:cdiv(max_layer:forward(gb_gcam_th_all:csub(min_layer:forward(gb_gcam_th_all))));
+			
+			im_blur_all=torch.cmul(gb_gcam_th_all,inputs_blur)+torch.cmul((1-gb_gcam_th_all),inputs_org);
+				-- 3,7.6,12,18.2,25
 
 		    for im_num=1,inputs_org:size(1) do
-		    	local gcam=gcam_curr[im_num]:clone()
 		    	if not torch.all(torch.eq(gcam_pred[im_num],gcam_gt[im_num])) then
 		    		print (im_num);
 		    	end
-		    	
-		    	local gcam=image.scale(gcam:float(), inputs_org:size(3), inputs_org:size(4));
-		    	local gb_viz=gb_viz_curr[im_num][1]:float();
-		    	local gb_gcam=torch.cmul(gcam,gb_viz);
-		    	local gb_gcam_org  = gb_gcam:clone();
-		    	local hm = utils.to_heatmap(gcam)
-
-		    	gb_gcam=torch.sum(gb_gcam,1);
-				gb_gcam=torch.abs(gb_gcam);
-				gb_gcam=gb_gcam-torch.min(gb_gcam);
-				gb_gcam:div(torch.max(gb_gcam));
-
-				local out_file_org=out_file_pre..im_num..'_org.jpg';
+		    	local out_file_org=out_file_pre..im_num..'_org.jpg';
 				local out_file_hm=out_file_pre..im_num..'_hm'..out_file_post;
 				local out_file_gb_gcam=out_file_pre..im_num..'_gb_gcam'..out_file_post;
 				local out_file_gb_gcam_org=out_file_pre..im_num..'_gb_gcam_org'..out_file_post;
 				local out_file_gb_gcam_th=out_file_pre..im_num..'_gb_gcam_th'..out_file_post;
-				local im_org = inputs_org[im_num][1]:clone();
-				-- local im_g = image.convolve(im_org,torch.ones(10,10):float(),'same');
-				-- print (image.gaussian(2*conv_size+1,2*conv_size+1):float())
-				local im_g = image.convolve(im_org,image.gaussian(2*conv_size+1,2*conv_size+1):float(),'same');
-
 				local out_file_g = out_file_pre..im_num..'_gaussian'..out_file_post;
-				image.save(out_file_g,image.toDisplayTensor(im_g));
-				
-				im_g:div(torch.max(im_g));
-
-				local gb_gcam_vals=torch.sort(gb_gcam:view(-1),1,true);
-				local idx=math.floor(gb_gcam_vals:size(1)*0.05);
-				local gb_gcam_th =torch.zeros(gb_gcam:size()):type(gb_gcam:type());
-				gb_gcam_th[gb_gcam:ge(gb_gcam_vals[idx])]=1;
-				-- gb_gcam_th = image.convolve(gb_gcam_th,torch.ones(5,5):float(),'same');				
-				gb_gcam_th = image.convolve(gb_gcam_th,image.gaussian(conv_size,conv_size):float(),'same');
-				gb_gcam_th:div(torch.max(gb_gcam_th));
-				gb_gcam_th[gb_gcam_th:gt(0.5)]=1;
-
-				local im_blur=torch.cmul(gb_gcam_th,im_g)+torch.cmul((1-gb_gcam_th),im_org);
 				local out_file_blur = out_file_pre..im_num..'_blur'..out_file_post;
+				
+				local gcam=gcam_curr[im_num]
+		    	local gb_gcam = gb_gcam_all[im_num];
+		    	local gb_gcam_org = gb_gcam_org_all[im_num]
+		    	local hm = utils.to_heatmap(gcam:float())
+		    	local im_org = inputs_org[im_num][1];
+				local im_g = inputs_blur[im_num][1];
+				local gb_gcam_th = gb_gcam_th_all[im_num][1];
+				local im_blur = im_blur_all[im_num][1]
+
+				-- print ('gcam',torch.min(gcam),torch.max(gcam));
+		  --   	print ('gb_gcam',torch.min(gb_gcam),torch.max(gb_gcam));
+		  --   	print ('gb_gcam_org',torch.min(gb_gcam_org),torch.max(gb_gcam_org));
+		  --   	print ('hm',torch.min(hm),torch.max(hm));
+		  --   	print ('im_org',torch.min(im_org),torch.max(im_org));
+				-- print ('im_g',torch.min(im_g),torch.max(im_g));
+				-- print ('gb_gcam_th',torch.min(gb_gcam_th),torch.max(gb_gcam_th));
+				-- print ('im_blur',torch.min(im_blur),torch.max(im_blur));
+
 				image.save(out_file_blur,image.toDisplayTensor(im_blur));
-								
 				image.save(out_file_gb_gcam_th, image.toDisplayTensor(gb_gcam_th))
 		    	image.save(out_file_gb_gcam, image.toDisplayTensor(gb_gcam))
 		    	image.save(out_file_gb_gcam_org, image.toDisplayTensor(gb_gcam_org))
 		    	image.save(out_file_hm, image.toDisplayTensor(hm))
-		    	image.save(out_file_org, image.toDisplayTensor(inputs_org[im_num][1]))
-
-		    end
+		    	image.save(out_file_org, image.toDisplayTensor(im_org))
+		    	image.save(out_file_g,image.toDisplayTensor(im_g));
+	   		end
+			
 		end
 
 	    local loss = torch.sum(batch_targets:eq(pred_labels))/batch_targets:nElement();
+	    print (loss);
+	    local outputs=net:forward(meanIt(im_blur_all:mul(255),vd.mean_im,vd.std_im));
+		-- local outputs_gb= net_gb:forward(batch_inputs);
+
+		local scores, pred_labels = torch.max(outputs, 2);
+		pred_labels = pred_labels:type(batch_targets:type());
+	    pred_labels = pred_labels:view(batch_targets:size());
+	    local loss = torch.sum(batch_targets:eq(pred_labels))/batch_targets:nElement();
+	    print (loss);
 
 	    val_losses[#val_losses+1]=loss;
 	    val_losses_iter[#val_losses_iter+1]=i;
@@ -200,18 +256,18 @@ function main(params)
 	    print(disp_str)
    		-- end
    	end
-    local out_dir_diff=paths.concat(params.outDir,'diff_im_1');
-    paths.mkdir(out_dir_diff);
-	local data_params={file_path=params.val_data_path,
-                batch_size=64,
-                mean_file=params.mean_im_path,
-                std_file=params.std_im_path,
-                augmentation=false,
-                limit=params.limit,
-                out_dir_diff=out_dir_diff
-                };
-	local vd=data_face(data_params);
-	vd:saveDifficultImages(net,net_gb,params.layer_to_viz,0.05,5);
+ --    local out_dir_diff=paths.concat(params.outDir,'diff_im_1');
+ --    paths.mkdir(out_dir_diff);
+	-- local data_params={file_path=params.val_data_path,
+ --                batch_size=64,
+ --                mean_file=params.mean_im_path,
+ --                std_file=params.std_im_path,
+ --                augmentation=false,
+ --                limit=params.limit,
+ --                out_dir_diff=out_dir_diff
+ --                };
+	-- local vd=data_face(data_params);
+	-- vd:saveDifficultImages(net,net_gb,params.layer_to_viz,0.05,5);
 
 
     collectgarbage();
@@ -277,7 +333,7 @@ function testTwoListData(params)
 	net_gb=net_gb:cuda();
 	net:evaluate();
 	
-    local out_dir_diff=paths.concat(params.outDir,'diff_im_1');
+    local out_dir_diff=paths.concat(params.outDir,'diff_im_1'); 
     paths.mkdir(out_dir_diff);
 	local data_params={file_path=params.val_data_path,
                 batch_size=64,
@@ -299,6 +355,7 @@ function testTwoListData(params)
 	print ('getTrainingData 1');
 	vd:getTrainingData(1);
 	local batch_targets=vd.training_set.label:cuda();
+	net:evaluate();
    	local outputs = net:forward(vd.training_set.data:cuda());
    	local scores, pred_labels = torch.max(outputs, 2);
 	pred_labels = pred_labels:type(batch_targets:type());
@@ -308,20 +365,22 @@ function testTwoListData(params)
 
 
 
-	local out_file_pre = paths.concat(params.outDir,'viz_batch');
-	paths.mkdir(out_file_pre);
-	local batch_inputs=vd.training_set.data;
-	print (batch_inputs:size())
-    local inputs_org=unMean(batch_inputs,vd.mean_im,vd.std_im):div(255):float();
-    for im_num=1,inputs_org:size(1) do
-		local out_file_org=paths.concat(out_file_pre,im_num..'_org.jpg');
-    	image.save(out_file_org, image.toDisplayTensor(inputs_org[im_num][1]))
-   	end
+	-- local out_file_pre = paths.concat(params.outDir,'viz_batch');
+	-- paths.mkdir(out_file_pre);
+	-- local batch_inputs=vd.training_set.data;
+	-- print (batch_inputs:size())
+ --    local inputs_org=unMean(batch_inputs,vd.mean_im,vd.std_im):div(255):float();
+ --    for im_num=1,inputs_org:size(1) do
+	-- 	local out_file_org=paths.concat(out_file_pre,im_num..'_org.jpg');
+ --    	image.save(out_file_org, image.toDisplayTensor(inputs_org[im_num][1]))
+ --   	end
 
 
 	print ('getTrainingData 0');
+
 	vd:getTrainingData(0);
 	local batch_targets=vd.training_set.label:cuda();
+	net:evaluate();
    	local outputs = net:forward(vd.training_set.data:cuda());
    	local scores, pred_labels = torch.max(outputs, 2);
 	pred_labels = pred_labels:type(batch_targets:type());
@@ -383,5 +442,5 @@ cmd:option('-layer_to_viz',8,'gpu to run the training on');
 
 
 params = cmd:parse(arg)
--- main(params);    
-testTwoListData(params)
+main(params);    
+-- testTwoListData(params)
