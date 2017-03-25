@@ -91,41 +91,46 @@ def script_vizTestGradCam():
     out_dir_meta=os.path.join(dir_meta_pre,'scratch/test_grad_cam');
     test_pre='../data/ck_96/train_test_files/test_';
     # expressions=['neutral', 'anger', 'contempt', 'disgust', 'fear', 'happy', 'sadness', 'surprise'];
-    expressions=['pred', 'gt']
+    # expressions=['pred', 'gt']
+    expressions=['']
     npy_file='1_pred_labels.npy';
 
     # , 'contempt', 'disgust', 'fear', 'happy', 'sadness', 'surprise'];
     pres=['_gb_gcam_org_','_hm_'];
     pres=['_gb_gcam_th_','_gb_gcam_','_gaussian_','_blur_'];
+    # pres=['_gb_gcam_th_','_gb_gcam_','_gaussian_','_blur_'];
+    pres=['_org','_gb_gcam','_hm','_gb_gcam_org','_gb_gcam_th','_gaussian','_blur']
+    
     num_folds=10;
     im_posts=['_org.jpg']+[pre+exp_curr+'.jpg' for pre in pres for exp_curr in expressions]; 
             # ['_gb_gcam_org_'+exp_curr+'.jpg' for exp_curr in expressions]+\
             # ['_hm_'+exp_curr+'.jpg' for exp_curr in expressions];
             # ['_gb_gcam_'+exp_curr+'.jpg' for exp_curr in expressions]+\
             
-    out_file_html=os.path.join(out_dir_meta,'temp_data_face_test.html');
+    out_file_html=os.path.join(out_dir_meta,'test_buildBlurryBatch.html');
     # out_file_html=os.path.join(out_dir_meta,'viz_all.html');
     im_dirs=[];
     num_ims_all=[];
     gt_labels_all=[];
     pred_labels_all=[];
     
-    for fold_num in range(11,11+1):
+    for fold_num in range(10,10+1):
 
         out_dir=os.path.join(out_dir_meta,str(fold_num));
         # out_dir=out_dir_meta;
         # out_file_html=out_dir+'.html';
-        im_dir=os.path.join(out_dir,'diff_im');
+        # im_dir=os.path.join(out_dir,'images');
+        im_dir=os.path.join(out_dir,'test_buildBlurryBatch');
         # out_file_html=os.path.join(out_dir,os.path.split(out_dir)[1]+'.html');
         fold_num=0
         # fold_num%10;
 
-        pred_labels=np.load(os.path.join(out_dir,npy_file)).astype(int);
+        # pred_labels=np.load(os.path.join(out_dir,npy_file)).astype(int);
         gt_data=util.readLinesFromFile(test_pre+str(fold_num)+'.txt')
         gt_labels=np.array([int(line_curr.split(' ')[1]) for line_curr in gt_data])+1;
-        # print pred_labels.shape,pred_labels[:10];
-        # print gt_labels.shape,gt_labels[:10];
-        # print len(gt_data)+1
+        pred_labels = gt_labels;
+
+
         num_ims=list(range(1,len(gt_data)+1));
         im_dirs.append(im_dir)
         num_ims_all.append(num_ims);
