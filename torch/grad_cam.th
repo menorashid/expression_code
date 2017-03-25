@@ -334,7 +334,7 @@ function testTwoListData(params)
                 batch_size=params.batchSizeTest,
                 mean_file=params.mean_im_path,
                 std_file=params.std_im_path,
-                augmentation=true,
+                augmentation=false,
                 limit=params.limit,
                 out_dir_diff=out_dir_diff
                 };

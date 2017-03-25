@@ -152,10 +152,10 @@ do
 
         -- build a batch of unaugmented images 0 255 mean subtracted
         self:getTrainingData();
+        -- set cuda
         self.training_set.data = self.training_set.data:cuda();
         self.training_set.label = self.training_set.label:cuda();
         local batch_inputs = self.training_set.data;
-        print ('inputs min max',torch.min(batch_inputs),torch.max(batch_inputs));
         local batch_targets = self.training_set.label;
         self.mean_batch = self.mean_batch:cuda();
         self.std_batch = self.std_batch:cuda();
@@ -166,12 +166,13 @@ do
         -- get gcam stuff
         local gcam_both,gb_viz_both,pred_labels = self:getGCamEtc(net,net_gb,layer_to_viz,batch_inputs,batch_targets)
 
+        -- set input range between 0-1 again
         local inputs_org=self:unMean(self.mean_batch,self.std_batch):div(255)
-        -- :cuda(); 
-        -- print (inputs_org:type(),gauss_layer:type());
+        -- create input with blur
         local inputs_blur=gauss_layer:forward(inputs_org);
         inputs_blur:cdiv(max_layer:forward(inputs_blur:csub(min_layer:forward(inputs_blur))));
         
+        -- get activations
         local gcam_curr = gcam_both[2];
         local gb_viz_curr = gb_viz_both[2]
         gcam_curr = up_layer:forward(gcam_curr);
@@ -183,81 +184,68 @@ do
         local vals_all = gb_gcam_th_all:clone();
         for im_num =1, inputs_org:size(1) do
 
-            -- this is where we use strategy
+            -- this is where we use strategy TODO
 
             local gb_gcam = gb_gcam_all[im_num][1];
             local gb_gcam_vals = torch.sort(gb_gcam:view(-1),1,true);
             local val = gb_gcam_vals[math.floor(gb_gcam_vals:size(1)*0.05)];
             vals_all[im_num][1]:fill(val);
         end
+        
+        -- create masks and blur
         gb_gcam_th_all[gb_gcam_all:ge(vals_all)]=1;
         gb_gcam_th_all[gb_gcam_all:lt(vals_all)]=0;
         gb_gcam_th_all=gauss_layer_small:forward(gb_gcam_th_all);
         gb_gcam_th_all:cdiv(max_layer:forward(gb_gcam_th_all:csub(min_layer:forward(gb_gcam_th_all))));
         
+        -- blur specific parts in input image
         local im_blur_all=torch.cmul(gb_gcam_th_all,inputs_blur)+torch.cmul((1-gb_gcam_th_all),inputs_org);
         
-        im_blur_all = im_blur_all:double();
-        batch_targets = batch_targets:double();
-
-
-        self.augmentation = aug_org;
-        print ('im_blur_all',torch.min(im_blur_all),torch.max(im_blur_all));
-        if self.augmentation then
-            for img_face_num=1,im_blur_all:size(1) do
-                im_blur_all[img_face_num]=self:augmentImage(im_blur_all[img_face_num]);
-            end
-        end
-        print ('im_blur_all',torch.min(im_blur_all),torch.max(im_blur_all));
-
-        im_blur_all:mul(255);
+        -- set doubles and augment data if necessary
         self.mean_batch = self.mean_batch:double();
         self.std_batch = self.std_batch:double();
-
-        print (im_blur_all:type(),self.mean_batch:type(),self.std_batch:type())
-        im_blur_all=torch.cdiv((im_blur_all-self.mean_batch),self.std_batch);
-        
+        self.augmentation = aug_org;
+        batch_targets = batch_targets:double();
+        im_blur_all = self:processImBatch(im_blur_all:double());
 
         self.training_set.data = im_blur_all;
         self.training_set.label = batch_targets;
 
-        im_blur_all=self:unMean(self.mean_batch,self.std_batch);
-
-        print ('im_blur_all not fix',torch.min(im_blur_all),torch.max(im_blur_all));
-        -- im_blur_all[im_blur_all:ne(im_blur_all)]=0;
-
-        print ('gb_gcam_org_all',torch.min(gb_gcam_org_all),torch.max(gb_gcam_org_all));
-        print ('inputs_org',torch.min(inputs_org),torch.max(inputs_org));
-        print ('inputs_blur',torch.min(inputs_blur),torch.max(inputs_blur));
-        print ('gb_gcam_th_all',torch.min(gb_gcam_th_all),torch.max(gb_gcam_th_all));
-        print ('im_blur_all',torch.min(im_blur_all),torch.max(im_blur_all));
-        
-        for im_num=1,inputs_org:size(1) do
-            local out_file_org=out_file_pre..im_num..'_org.jpg';
-            local out_file_gb_gcam=out_file_pre..im_num..'_gb_gcam.jpg';
-            local out_file_hm=out_file_pre..im_num..'_hm.jpg';
-            local out_file_gb_gcam_org=out_file_pre..im_num..'_gb_gcam_org.jpg';
-            local out_file_gb_gcam_th=out_file_pre..im_num..'_gb_gcam_th.jpg';
-            local out_file_g = out_file_pre..im_num..'_gaussian.jpg';
-            local out_file_blur = out_file_pre..im_num..'_blur.jpg';
+        if out_file_pre then
+            im_blur_all=self:unMean(self.mean_batch,self.std_batch);
+            -- print ('gb_gcam_org_all',torch.min(gb_gcam_org_all),torch.max(gb_gcam_org_all));
+            -- print ('inputs_org',torch.min(inputs_org),torch.max(inputs_org));
+            -- print ('inputs_blur',torch.min(inputs_blur),torch.max(inputs_blur));
+            -- print ('gb_gcam_th_all',torch.min(gb_gcam_th_all),torch.max(gb_gcam_th_all));
+            -- print ('im_blur_all',torch.min(im_blur_all),torch.max(im_blur_all));
             
-            local gcam=gcam_curr[im_num]
-            local gb_gcam = gb_gcam_all[im_num];
-            local gb_gcam_org = gb_gcam_org_all[im_num]
-            local hm = utils.to_heatmap(gcam:float())
-            local im_org = inputs_org[im_num][1];
-            local im_g = inputs_blur[im_num][1];
-            local gb_gcam_th = gb_gcam_th_all[im_num][1];
-            local im_blur = im_blur_all[im_num][1]
+            for im_num=1,inputs_org:size(1) do
+                local out_file_org=out_file_pre..im_num..'_org.jpg';
+                local out_file_gb_gcam=out_file_pre..im_num..'_gb_gcam.jpg';
+                local out_file_hm=out_file_pre..im_num..'_hm.jpg';
+                local out_file_gb_gcam_org=out_file_pre..im_num..'_gb_gcam_org.jpg';
+                local out_file_gb_gcam_th=out_file_pre..im_num..'_gb_gcam_th.jpg';
+                local out_file_g = out_file_pre..im_num..'_gaussian.jpg';
+                local out_file_blur = out_file_pre..im_num..'_blur.jpg';
+                
+                local gcam=gcam_curr[im_num]
+                local gb_gcam = gb_gcam_all[im_num];
+                local gb_gcam_org = gb_gcam_org_all[im_num]
+                local hm = utils.to_heatmap(gcam:float())
+                local im_org = inputs_org[im_num][1];
+                local im_g = inputs_blur[im_num][1];
+                local gb_gcam_th = gb_gcam_th_all[im_num][1];
+                local im_blur = im_blur_all[im_num][1]
 
-            
-            image.save(out_file_blur,image.toDisplayTensor(im_blur));
-            image.save(out_file_gb_gcam_th, image.toDisplayTensor(gb_gcam_th))
-            image.save(out_file_gb_gcam, image.toDisplayTensor(gb_gcam))
-            image.save(out_file_gb_gcam_org, image.toDisplayTensor(gb_gcam_org))
-            image.save(out_file_hm, image.toDisplayTensor(hm))
-            image.save(out_file_org, image.toDisplayTensor(im_org))
-            image.save(out_file_g,image.toDisplayTensor(im_g));
+                
+                image.save(out_file_blur,image.toDisplayTensor(im_blur));
+                image.save(out_file_gb_gcam_th, image.toDisplayTensor(gb_gcam_th))
+                image.save(out_file_gb_gcam, image.toDisplayTensor(gb_gcam))
+                image.save(out_file_gb_gcam_org, image.toDisplayTensor(gb_gcam_org))
+                image.save(out_file_hm, image.toDisplayTensor(hm))
+                image.save(out_file_org, image.toDisplayTensor(im_org))
+                image.save(out_file_g,image.toDisplayTensor(im_g));
+            end
         end
 
         -- set nets back
@@ -290,7 +278,6 @@ do
         self.training_set.data=torch.zeros(self.batch_size,1,self.input_size[1]
             ,self.input_size[2]);
         self.training_set.label=torch.zeros(self.batch_size);
-        print (self.training_set.label:type())
         self.training_set.input={};
         
         self.start_idx_face=self:addTrainingData(self.training_set,self.batch_size,
@@ -356,6 +343,20 @@ do
         -- end
         img_face[img_face:ne(img_face)]=0;
         return img_face;
+    end
+
+    function data:processImBatch(im_batch)
+        
+        if self.augmentation then
+            for img_face_num=1,im_batch:size(1) do
+                im_batch[img_face_num]=self:augmentImage(im_batch[img_face_num]);
+            end
+        end
+        
+        im_batch:mul(255);
+        im_batch=torch.cdiv((im_batch-self.mean_batch),self.std_batch);
+        
+        return im_batch;
     end
 
     function data:processIm(img_face)
