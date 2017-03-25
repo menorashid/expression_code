@@ -141,17 +141,15 @@ do
 
 
     function data:buildBlurryBatch(net,net_gb,layer_to_viz,activation_thresh,conv_size,strategy,out_file_pre)
-        -- set augmentation off; 
-        local aug_org=self.augmentation;
-        self.augmentation=false;
-
+        
         -- set nets mode
         local train_state=net.train;
         net:evaluate();
         net_gb:evaluate();
 
-        -- build a batch of unaugmented images 0 255 mean subtracted
+        -- build a batch of images 0 255 mean subtracted
         self:getTrainingData();
+
         -- set cuda
         self.training_set.data = self.training_set.data:cuda();
         self.training_set.label = self.training_set.label:cuda();
@@ -201,23 +199,20 @@ do
         -- blur specific parts in input image
         local im_blur_all=torch.cmul(gb_gcam_th_all,inputs_blur)+torch.cmul((1-gb_gcam_th_all),inputs_org);
         
-        -- set doubles and augment data if necessary
-        self.mean_batch = self.mean_batch:double();
-        self.std_batch = self.std_batch:double();
-        self.augmentation = aug_org;
-        batch_targets = batch_targets:double();
-        im_blur_all = self:processImBatch(im_blur_all:double());
-
+        -- mean subtract
+        im_blur_all:mul(255);
+        im_blur_all=torch.cdiv((im_blur_all-self.mean_batch),self.std_batch);
+        
         self.training_set.data = im_blur_all;
         self.training_set.label = batch_targets;
 
         if out_file_pre then
             im_blur_all=self:unMean(self.mean_batch,self.std_batch);
-            -- print ('gb_gcam_org_all',torch.min(gb_gcam_org_all),torch.max(gb_gcam_org_all));
-            -- print ('inputs_org',torch.min(inputs_org),torch.max(inputs_org));
-            -- print ('inputs_blur',torch.min(inputs_blur),torch.max(inputs_blur));
-            -- print ('gb_gcam_th_all',torch.min(gb_gcam_th_all),torch.max(gb_gcam_th_all));
-            -- print ('im_blur_all',torch.min(im_blur_all),torch.max(im_blur_all));
+            print ('gb_gcam_org_all',torch.min(gb_gcam_org_all),torch.max(gb_gcam_org_all));
+            print ('inputs_org',torch.min(inputs_org),torch.max(inputs_org));
+            print ('inputs_blur',torch.min(inputs_blur),torch.max(inputs_blur));
+            print ('gb_gcam_th_all',torch.min(gb_gcam_th_all),torch.max(gb_gcam_th_all));
+            print ('im_blur_all',torch.min(im_blur_all),torch.max(im_blur_all));
             
             for im_num=1,inputs_org:size(1) do
                 local out_file_org=out_file_pre..im_num..'_org.jpg';
