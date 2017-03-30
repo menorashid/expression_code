@@ -89,7 +89,7 @@ function createBaseKhorramiModel(out_file,num_out)
 end
 
 function main()
-	local num_out=8;
+	local num_out=7;
 	local out_file='../models/base_khorrami_model_'..num_out..'.dat'
 	createBaseKhorramiModel(out_file,num_out);
 	local model=torch.load(out_file);

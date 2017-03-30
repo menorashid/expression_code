@@ -21,7 +21,8 @@ function getOptimStateTotal(params,parameters,logger)
         end
 
         local learningRate_curr=params.learningRate;
-        if #parameters[layer_num]:size()==1 then
+
+        if params.noBias and #parameters[layer_num]:size()==1 then
             learningRate_curr=0;
         end
         
@@ -131,6 +132,9 @@ function test(params)
     --     criterion=nn.CrossEntropyCriterion():cuda()
     -- end
     -- local criterion = nn.ClassNLLCriterion(criterion_weights):cuda();
+                                       -- reset matrix
+    local batch_targets_all=nil;
+    local outputs_all=nil;
     local val_losses={};
     local accuracy={};
     local val_losses_iter={};
@@ -147,8 +151,8 @@ function test(params)
         local maxs, indices = torch.max(outputs, 2);
         indices=indices:type(batch_targets:type());
         indices=indices:view(batch_targets:size());
-        print (indices[{{1,10}}]);
-        print (batch_targets[{{1,10}}]);
+        -- print (indices[{{1,10}}]);
+        -- print (batch_targets[{{1,10}}]);
         -- local accuracy_idx = torch.linspace(1,batch_targets:size(1),batch_targets:size(1)):long()
         -- local selected = accuracy_idx[batch_targets:eq(indices)];
         local accuracy_curr = torch.sum(batch_targets:eq(indices))/batch_targets:nElement();
@@ -163,14 +167,40 @@ function test(params)
         logger:writeString(dump.tostring(disp_str)..'\n');
         print (disp_str);
         
-        conf = optim.ConfusionMatrix( {'neutral', 'anger', 'contempt', 'disgust', 'fear', 'happy', 'sadness', 'surprise'} )   -- new matrix
-        conf:zero()                                              -- reset matrix
-        -- for i = 1,N do
-        conf:batchAdd( outputs, batch_targets )         -- accumulate errors
-        -- end
-        print(conf)                      
-    end
+        -- print (outputs:size());
+        -- print (batch_targets:size()); 
+        if not outputs_all then
+            outputs_all=outputs:clone();    
+        else
+            outputs_all=torch.cat(outputs_all,outputs,1);
+        end
 
+        if not batch_targets_all then
+            batch_targets_all = batch_targets:clone();
+        else
+            batch_targets_all = torch.cat(batch_targets_all,batch_targets,1);
+        end
+        
+        -- conf:batchAdd( outputs,batch_targets);
+        -- local s=tostring(conf)
+        -- logger:writeString(s..'\n');       
+        -- print (out_file_log)     
+    end
+    -- print (outputs_all:size())
+    -- print (batch_targets_all:size());
+    -- print (#vd.lines_face,outputs_all:size(1),batch_targets_all:size(1))
+    assert (outputs_all:size(1)==batch_targets_all:size(1))
+    assert (outputs_all:size(1)>=#vd.lines_face)
+    outputs_all=outputs_all[{{1,#vd.lines_face},{}}]
+    batch_targets_all=batch_targets_all[{{1,#vd.lines_face}}];
+    -- print (outputs_all:size())
+    -- print (batch_targets_all:size());
+    local conf = optim.ConfusionMatrix( {'neutral', 'anger','disgust', 'fear', 'happy', 'sadness', 'surprise'} )
+    conf:zero()    
+    conf:batchAdd( outputs_all, batch_targets_all )         -- accumulate errors
+    print (conf);
+    local s=tostring(conf)
+    logger:writeString(s..'\n');       
 end
 
 
@@ -423,7 +453,7 @@ cmd:text('Options')
 local epoch_size=18;
 -- 56;
 
-cmd:option('-model','../models/base_khorrami_model_8.dat');
+cmd:option('-model','../models/base_khorrami_model_7.dat');
 cmd:option('-mean_im_path','../data/ck_96/train_test_files/train_0_mean.png');
 cmd:option('-std_im_path','../data/ck_96/train_test_files/train_0_std.png');
 
@@ -446,11 +476,13 @@ cmd:option('weightDecay', 1e-5)
 cmd:option('momentum', 0.9)
 
 cmd:option('augmentation' , true);
+cmd:option('-noBias' , false);
 
 cmd:option('-gpu',1,'gpu to run the training on');
 
-cmd:option('-outDir','/home/SSD3/maheen-data/expression_project/scratch/train_aug_fix/0');
-cmd:option('-modelTest','/home/SSD3/maheen-data/expression_project/scratch/train_aug_fix/0/final/model_all_final.dat');
+cmd:option('-outDir','../scratch/temp');
+cmd:option('-modelTest','../experiments/khorrami_basic_tfd/0/intermediate/model_all_2200.dat');
+    -- '/home/SSD3/maheen-data/expression_project/scratch/train_aug_fix/0/final/model_all_final.dat');
 
 
 params = cmd:parse(arg)

@@ -4,6 +4,7 @@ import util;
 import os;
 import visualize;
 import scipy;
+import scipy.io;
 dir_server='/home/SSD3/maheen-data/';
 click_str='http://vision1.idav.ucdavis.edu:1000/';
 
@@ -203,11 +204,17 @@ def getSTDImage(im_files,mean,resize_size,disp_idx=1000):
     # print np.min(std),np.max(std);
     return std;
 
-def saveCKMeanSTDImages():
-    data_dir='../data/ck_96/train_test_files';
-    train_pre='train_';
-    resize_size=[96,96];
-    for num_fold in range(10):
+def saveCKMeanSTDImages(data_dir=None,train_pre=None,resize_size=None,num_folds=None):
+    if data_dir is None:
+        data_dir='../data/ck_96/train_test_files';
+    if train_pre is None:
+        train_pre='train_';
+    if resize_size is None:
+        resize_size=[96,96];
+    if num_folds is None:
+        num_folds=10;
+
+    for num_fold in range(num_folds):
         train_file=os.path.join(data_dir,train_pre+str(num_fold)+'.txt');
         out_file_pre=os.path.join(data_dir,train_pre+str(num_fold));
         mean_file,std_file=saveMeanSTDFiles(train_file,out_file_pre,resize_size,disp_idx=2000);
@@ -239,66 +246,137 @@ def scratch():
     print balanced_weights
     np.save(weights_file,balanced_weights);
 
-def main():
-    experiment_name='khorrami_basic_aug_fix_resume_again';
-    out_dir_meta='../experiments/'+experiment_name;
-    util.mkdir(out_dir_meta);
-    out_script='../scripts/train_'+experiment_name+'.sh';
-    path_to_th='train_khorrami_basic.th';
 
-    dir_files='../data/ck_96/train_test_files';
-    resume_dir_meta='../experiments/khorrami_basic_aug_fix_resume'
-    num_folds=10;
+def saveTFDImages():
+    tfd_file_name = '../data/tfd/TFD_96x96.mat';
+    out_dir_im='../data/tfd/im';
+    out_file_anno='../data/tfd/anno_all.txt';
+    util.mkdir(out_dir_im);
 
-    commands=[];
-    # print '{',
+    fold_info=[('train_',1),('val_',2),('test_',3)];
+
+    tfd_data=scipy.io.loadmat(tfd_file_name);
+    ims = tfd_data['images'];
+    labels = tfd_data['labs_ex'];
+    folds = tfd_data['folds'];
+    ids = tfd_data['labs_id'];
+
+    labels= labels[:,0];
+    ims = ims[labels>0,:,:];
+    folds = folds[labels>0,:];
+    num_folds=5;
+    ids = ids[labels>0,:];
+    labels = labels[labels>0];
+    labels = labels-1;
+
+    annos=[];
+    for im_num in range(ims.shape[0]):
+        im_curr = ims[im_num];
+        out_file_curr=os.path.join(out_dir_im,'im_'+str(im_num)+'.jpg');
+        scipy.misc.imsave(out_file_curr,im_curr);
+        anno_curr=out_file_curr+' '+str(labels[im_num]);
+        annos.append(anno_curr) 
+
+    util.writeFile(out_file_anno,annos);
+
+def saveTFDTrainTestFolds():
+    tfd_file_name = '../data/tfd/TFD_96x96.mat';
+    out_dir_im='../data/tfd/im';
+    out_dir_files = '../data/tfd/train_test_files';
+    util.mkdir(out_dir_files);
+    fold_info=[('train_',1),('val_',2),('test_',3)];
+
+    tfd_data=scipy.io.loadmat(tfd_file_name);
+
+    ims = tfd_data['images'];
+    labels = tfd_data['labs_ex'];
+    folds = tfd_data['folds'];
+    ids = tfd_data['labs_id'];
+
+    labels= labels[:,0];
+    ims = ims[labels>0,:,:];
+    folds = folds[labels>0,:];
+    num_folds=folds.shape[1];
+    ids = ids[labels>0,:];
+    labels = labels[labels>0];
+    labels = labels-1;
+
     for fold_num in range(num_folds):
-        
-        
-        data_path=os.path.join(dir_files,'train_'+str(fold_num)+'.txt');
-        val_data_path=os.path.join(dir_files,'test_'+str(fold_num)+'.txt');
-        mean_im_path=os.path.join(dir_files,'train_'+str(fold_num)+'_mean.png');
-        std_im_path=os.path.join(dir_files,'train_'+str(fold_num)+'_std.png');
+        for file_pre,fold_id in fold_info:
+            out_file_curr = os.path.join(out_dir_files,file_pre+str(fold_num)+'.txt');
+            ids_ims = np.where(folds[:,fold_num]==fold_id)[0];
+            im_files=[os.path.join(out_dir_im,'im_'+str(im_num)+'.jpg') for im_num in ids_ims];
+            annos=labels[ids_ims];
+            lines=[im_file_curr+' '+str(annos[idx]) for idx,im_file_curr in enumerate(im_files)];
+            print out_file_curr,lines[0],len(lines);
+            util.writeFile(out_file_curr,lines);
 
-        batchSize=64;
-        epoch_size=len(util.readLinesFromFile(data_path))/batchSize;
-        batchSizeTest=len(util.readLinesFromFile(val_data_path));
-        # print str(batchSizeTest)+',',
+def saveTFDMeanSTDImages():
+    data_dir='../data/tfd/train_test_files';
+    train_pre='train_';
+    num_folds=5;
+    resize_size=[96,96];
+    saveCKMeanSTDImages(data_dir,train_pre,resize_size,num_folds)
 
-        outDir=os.path.join(out_dir_meta,str(fold_num));
+def sanityCheckTFD():
+    # sanity check.
+    # every line exists in anno
+    out_dir_meta='../data/tfd';
+    num_folds=5;
+    anno_file=os.path.join(out_dir_meta,'anno_all.txt');
+    anno_data=np.array(util.readLinesFromFile(anno_file));
+    file_pres=[os.path.join(out_dir_meta,'train_test_files',type_file+'_') for type_file in ['train','val','test']];
 
-        command=['th',path_to_th];
-        if resume_dir_meta is not None:
-            model_path_resume=os.path.join(resume_dir_meta,str(fold_num),'final','model_all_final.dat');
-            command = command+['-model',model_path_resume];            
-
-        command = command+['-mean_im_path',mean_im_path];
-        command = command+['-std_im_path',std_im_path];
-        command = command+['-batchSize',batchSize];
-
-        command = command+['-iterations',250*epoch_size];
-        command = command+['-saveAfter',10*epoch_size];
-        command = command+['-testAfter',5*epoch_size];
-        command = command+['-dispAfter',1];
-        command = command+['-dispPlotAfter',5*epoch_size];
-
-        command = command+['-val_data_path',val_data_path];
-        command = command+['-data_path',data_path];
-        
-        command = command+['-iterationsTest',1];
-        command = command+['-batchSizeTest',batchSizeTest];
-        
-        command = command+['-outDir',outDir];
-        command = command+['-modelTest',os.path.join(outDir,'final','model_all_final.dat')];
-        command = [str(c_curr) for c_curr in command];
-        command=' '.join(command);
-        print command;
-        commands.append(command);
-    # print '}';
-    print out_script
-    util.writeFile(out_script,commands);
+    for fold_num in range(num_folds):
+        for file_pre in file_pres:
+            file_curr = file_pre+str(fold_num)+'.txt';
+            lines=util.readLinesFromFile(file_curr);
+            lines=np.array(lines);
+            idx_overlap=np.in1d(lines,anno_data);
+            assert lines.shape[0]==np.sum(idx_overlap);
 
 
+    # train test and val are separate
+    for fold_num in range(num_folds):
+        files=[file_pre+str(fold_num)+'.txt' for file_pre in file_pres];
+        lines=[np.array(util.readLinesFromFile(file_curr)) for file_curr in files];
+        assert np.sum(np.in1d(lines[1],lines[0]))==0;
+        assert np.sum(np.in1d(lines[2],lines[0]))==0;
+        assert np.sum(np.in1d(lines[1],lines[2]))==0;
+
+    # other check
+    # train of one does not overlap with test of any other
+    # not true;
+    for fold_num in range(num_folds):
+        file_train = file_pres[0]+str(fold_num)+'.txt';
+        lines_train = util.readLinesFromFile(file_train);
+        for fold_num_test in range(num_folds):
+            # if fold_num_test==fold_num:
+            #     continue;
+            file_test=file_pres[2]+str(fold_num_test)+'.txt'
+            lines_test = util.readLinesFromFile(file_test);
+            print fold_num,fold_num_test,len(lines_train),len(lines_test);
+            print np.sum(np.in1d(lines_test,lines_train));
+
+def main():
+    out_dir_meta='../data/tfd';
+    num_folds=5;
+    anno_file=os.path.join(out_dir_meta,'anno_all.txt');
+    annos=[int(line_curr.split(' ')[1]) for line_curr in util.readLinesFromFile(anno_file)];
+    print set(annos)
+    print len(set(annos))
+
+    
+    
+
+
+
+
+
+
+
+
+    
 
     
     

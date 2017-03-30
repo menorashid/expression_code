@@ -4,35 +4,51 @@ import util;
 import os;
 import visualize;
 import scipy;
+import math;
 dir_server='/home/SSD3/maheen-data/';
 click_str='http://vision1.idav.ucdavis.edu:1000/';
 
 def writeCKScripts():
-    experiment_name='khorrami_basic_aug_fix_resume_again';
+    # experiment_name='khorrami_basic_aug_fix_resume_again';
+    # out_dir_meta='../experiments/'+experiment_name;
+    # util.mkdir(out_dir_meta);
+    # out_script='../scripts/train_'+experiment_name+'.sh';
+    # path_to_th='train_khorrami_basic.th';
+
+    # dir_files='../data/ck_96/train_test_files';
+    # resume_dir_meta='../experiments/khorrami_basic_aug_fix_resume'
+    # num_folds=10;
+
+
+    experiment_name='khorrami_basic_tfd_withBias';
     out_dir_meta='../experiments/'+experiment_name;
     util.mkdir(out_dir_meta);
     out_script='../scripts/train_'+experiment_name+'.sh';
     path_to_th='train_khorrami_basic.th';
 
-    dir_files='../data/ck_96/train_test_files';
-    resume_dir_meta='../experiments/khorrami_basic_aug_fix_resume'
-    num_folds=10;
+    dir_files='../data/tfd/train_test_files';
+    resume_dir_meta=None
+    # '../experiments/khorrami_basic_tfd_resume'
+    noBias=False;
+    num_folds=5;
+
+    learningRate = 0.01;
+    batchSizeTest=128;
+    batchSize=128;
 
     commands=[];
     # print '{',
     for fold_num in range(num_folds):
-        
         
         data_path=os.path.join(dir_files,'train_'+str(fold_num)+'.txt');
         val_data_path=os.path.join(dir_files,'test_'+str(fold_num)+'.txt');
         mean_im_path=os.path.join(dir_files,'train_'+str(fold_num)+'_mean.png');
         std_im_path=os.path.join(dir_files,'train_'+str(fold_num)+'_std.png');
 
-        batchSize=64;
         epoch_size=len(util.readLinesFromFile(data_path))/batchSize;
-        batchSizeTest=len(util.readLinesFromFile(val_data_path));
+        totalSizeTest=len(util.readLinesFromFile(val_data_path));
         # print str(batchSizeTest)+',',
-
+        iterationsTest=int(math.ceil(totalSizeTest/float(batchSizeTest)));
         outDir=os.path.join(out_dir_meta,str(fold_num));
 
         command=['th',path_to_th];
@@ -43,18 +59,22 @@ def writeCKScripts():
         command = command+['-mean_im_path',mean_im_path];
         command = command+['-std_im_path',std_im_path];
         command = command+['-batchSize',batchSize];
+        
+        command = command+['learningRate',learningRate];
+        if noBias:
+            command = command+['-noBias'];
 
-        command = command+['-iterations',250*epoch_size];
-        command = command+['-saveAfter',10*epoch_size];
-        command = command+['-testAfter',5*epoch_size];
-        command = command+['-dispAfter',1];
-        command = command+['-dispPlotAfter',5*epoch_size];
+        command = command+['-iterations',500*epoch_size];
+        command = command+['-saveAfter',50*epoch_size];
+        command = command+['-testAfter',10*epoch_size];
+        command = command+['-dispAfter',1*epoch_size];
+        command = command+['-dispPlotAfter',10*epoch_size];
 
         command = command+['-val_data_path',val_data_path];
         command = command+['-data_path',data_path];
         
-        command = command+['-iterationsTest',1];
-        command = command+['-batchSizeTest',batchSizeTest];
+        command = command+['-iterationsTest',iterationsTest];
+        command = command+['-batchSizeTest',batchSizeTest]
         
         command = command+['-outDir',outDir];
         command = command+['-modelTest',os.path.join(outDir,'final','model_all_final.dat')];
@@ -65,6 +85,90 @@ def writeCKScripts():
     # print '}';
     print out_script
     util.writeFile(out_script,commands);
+
+
+def writeTFDSchemeScripts():
+    
+    experiment_name='khorrami_basic_tfd_schemes_halfBlur';
+    out_dir_meta='../experiments/'+experiment_name;
+    util.mkdir(out_dir_meta);
+    out_script='../scripts/train_'+experiment_name+'.sh';
+    path_to_th='train_khorrami_withBlur.th';
+
+    dir_files='../data/tfd/train_test_files';
+    resume_dir_meta=None
+    # '../experiments/khorrami_basic_tfd_resume'
+    num_folds=5;
+
+    learningRate = 0.01;
+    batchSizeTest=128;
+    batchSize=128;
+    ratioBlur=0.5;
+    schemes=['ncl','mix','mixcl'];
+    
+    
+    # print '{',
+    for scheme in schemes:
+
+        out_dir_meta_curr=os.path.join(out_dir_meta,scheme);
+        util.mkdir(out_dir_meta_curr)
+
+        commands=[];
+        for fold_num in range(num_folds):
+            out_script='../scripts/train_'+experiment_name+'_'+scheme+'.sh';
+
+            data_path=os.path.join(dir_files,'train_'+str(fold_num)+'.txt');
+            val_data_path=os.path.join(dir_files,'test_'+str(fold_num)+'.txt');
+            mean_im_path=os.path.join(dir_files,'train_'+str(fold_num)+'_mean.png');
+            std_im_path=os.path.join(dir_files,'train_'+str(fold_num)+'_std.png');
+
+            
+            epoch_size=len(util.readLinesFromFile(data_path))/batchSize;
+            totalSizeTest=len(util.readLinesFromFile(val_data_path));
+            # print str(batchSizeTest)+',',
+            
+            iterationsTest=int(math.ceil(totalSizeTest/float(batchSizeTest)));
+            outDir=os.path.join(out_dir_meta_curr,str(fold_num));
+
+            
+            command=['th',path_to_th];
+            if resume_dir_meta is not None:
+                model_path_resume=os.path.join(resume_dir_meta,str(fold_num),'final','model_all_final.dat');
+                command = command+['-model',model_path_resume];            
+
+            command = command+['-mean_im_path',mean_im_path];
+            command = command+['-std_im_path',std_im_path];
+            command = command+['-batchSize',batchSize];
+
+            command = command+['-ratioBlur',ratioBlur];
+            command = command+['-incrementDifficultyAfter',10*epoch_size];
+            command = command+['-scheme',scheme];
+            
+            command = command+['learningRate',learningRate];
+
+            command = command+['-iterations',750*epoch_size];
+            command = command+['-saveAfter',100*epoch_size];
+            command = command+['-testAfter',10*epoch_size];
+            command = command+['-dispAfter',1*epoch_size];
+            command = command+['-dispPlotAfter',10*epoch_size];
+
+            command = command+['-val_data_path',val_data_path];
+            command = command+['-data_path',data_path];
+            
+            command = command+['-iterationsTest',iterationsTest];
+            command = command+['-batchSizeTest',batchSizeTest]
+
+
+            
+            command = command+['-outDir',outDir];
+            command = command+['-modelTest',os.path.join(outDir,'final','model_all_final.dat')];
+            command = [str(c_curr) for c_curr in command];
+            command=' '.join(command);
+            # print command;
+            commands.append(command);
+        # print '}';
+        print out_script
+        util.writeFile(out_script,commands);
 
 
 def makeHTML_withPosts(out_file_html,im_dirs,num_ims_all,im_posts,gt_labels_all,pred_labels_all):
@@ -100,7 +204,7 @@ def script_vizTestGradCam():
     pres=['_gb_gcam_th_','_gb_gcam_','_gaussian_','_blur_'];
     # pres=['_gb_gcam_th_','_gb_gcam_','_gaussian_','_blur_'];
     pres=['_org','_gb_gcam','_hm','_gb_gcam_org','_gb_gcam_th','_gaussian','_blur']
-    
+
     num_folds=10;
     im_posts=['_org.jpg']+[pre+exp_curr+'.jpg' for pre in pres for exp_curr in expressions]; 
             # ['_gb_gcam_org_'+exp_curr+'.jpg' for exp_curr in expressions]+\
@@ -178,8 +282,10 @@ def writeTestGradCamScript():
     util.writeFile(out_script,commands);
 
 def main():
+    # writeTFDSchemeScripts();
+    writeCKScripts();
     # writeTestGradCamScript()
-    script_vizTestGradCam();
+    # script_vizTestGradCam();
 
 if __name__=='__main__':
     main();

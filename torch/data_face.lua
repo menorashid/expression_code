@@ -26,8 +26,8 @@ do
         self.out_dir_diff=args.out_dir_diff;
         self.start_idx_face_blur=1;
         self.ratio_blur=args.ratio_blur;
-
-        self.lines_face_diff={};
+        self.activation_upper=args.activation_upper;
+        -- self.lines_face_diff={};
 
         -- if args.num_labels then
         --     self.num_labels=args.num_labels;
@@ -64,7 +64,7 @@ do
             end
         end
         
-        self.lines_face_diff=self.lines_face;
+        -- self.lines_face_diff=self.lines_face;
 
         print (#self.lines_face);
     end
@@ -180,14 +180,38 @@ do
         
         local gb_gcam_th_all =torch.zeros(gb_gcam_all:size()):type(gb_gcam_all:type());
         local vals_all = gb_gcam_th_all:clone();
+    
+        local im_num_end_blur=inputs_org:size(1);
+        local max_val = torch.max(gb_gcam_all);
+        if self.ratio_blur then
+            im_num_end_blur=inputs_org:size(1)*self.ratio_blur;
+        end
+        
+
         for im_num =1, inputs_org:size(1) do
-
-            -- this is where we use strategy TODO
-
-            local gb_gcam = gb_gcam_all[im_num][1];
-            local gb_gcam_vals = torch.sort(gb_gcam:view(-1),1,true);
-            local val = gb_gcam_vals[math.floor(gb_gcam_vals:size(1)*0.05)];
-            vals_all[im_num][1]:fill(val);
+            if im_num<=im_num_end_blur then
+                local activation_thresh_curr;
+                
+                if strategy=='ncl' then
+                    activation_thresh_curr=activation_thresh;
+                elseif strategy=='mix' then
+                    activation_thresh_curr=torch.uniform(0,self.activation_upper);
+                elseif strategy=='mixcl' then
+                    if im_num<(im_num_end_blur/2) then
+                        activation_thresh_curr=torch.uniform(0,self.activation_upper);
+                        
+                    else
+                        activation_thresh_curr=activation_thresh;
+                    end
+                end
+                
+                local gb_gcam = gb_gcam_all[im_num][1];
+                local gb_gcam_vals = torch.sort(gb_gcam:view(-1),1,true);
+                local val = gb_gcam_vals[math.floor(gb_gcam_vals:size(1)*activation_thresh_curr)];
+                vals_all[im_num][1]:fill(val);
+            else
+                vals_all[im_num][1]:fill(max_val+1);
+            end
         end
         
         -- create masks and blur
@@ -195,7 +219,7 @@ do
         gb_gcam_th_all[gb_gcam_all:lt(vals_all)]=0;
         gb_gcam_th_all=gauss_layer_small:forward(gb_gcam_th_all);
         gb_gcam_th_all:cdiv(max_layer:forward(gb_gcam_th_all:csub(min_layer:forward(gb_gcam_th_all))));
-        
+        gb_gcam_th_all[gb_gcam_th_all:ne(gb_gcam_th_all)]=0;
         -- blur specific parts in input image
         local im_blur_all=torch.cmul(gb_gcam_th_all,inputs_blur)+torch.cmul((1-gb_gcam_th_all),inputs_org);
         
