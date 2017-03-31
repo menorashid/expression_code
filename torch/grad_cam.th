@@ -338,13 +338,38 @@ function testTwoListData(params)
                 limit=params.limit,
                 out_dir_diff=out_dir_diff,
                 ratio_blur=1,
-                activation_upper=0.5
+                activation_upper=0.5,
+                conv_size=5,
+                net=net:clone(),
+                net_gb=net_gb:clone(),
+                optimize=true
                 };
+
 	local vd=data_face(data_params);
 	
-	vd:buildBlurryBatch(net,net_gb,params.layer_to_viz,0.5,5,'ncl',out_file_pre);
+	local time_blurry = os.clock()
+	vd:buildBlurryBatch(params.layer_to_viz,0.05,'ncl');
+	print ('time_blurry',os.clock()-time_blurry);
+
+	local time_blurry = os.clock()
+	vd:buildBlurryBatch(params.layer_to_viz,0.05,'ncl');
+	print ('time_blurry',os.clock()-time_blurry);
+
+	-- local time_blurry = os.clock()
+	-- vd:buildBlurryBatch(params.layer_to_viz,0.05,'ncl',out_file_pre);
+	-- -- ,out_file_pre);
+	-- print ('time_blurry',os.clock()-time_blurry);
+
+	local time_blurry = os.clock()
+	vd:buildBlurryBatch(params.layer_to_viz,0.05,'ncl');
+	-- ,out_file_pre);
+	print ('time_blurry',os.clock()-time_blurry);
+
+
 	local batch_targets=vd.training_set.label;
 
+	-- print (net);
+	-- print (net_gb);
 	print ('nets train mode',net_gb.train,net.train);
 	net:evaluate();
 
@@ -357,8 +382,9 @@ function testTwoListData(params)
     local loss = torch.sum(batch_targets:eq(pred_labels))/batch_targets:nElement();
     print (loss);
 
-
+    local time_blurry = os.clock()
 	vd:getTrainingData();
+	print ('time_normal',os.clock()-time_blurry);
 	batch_targets=vd.training_set.label;
 	outputs=net:forward(vd.training_set.data:cuda());
 	scores, pred_labels = torch.max(outputs, 2);
@@ -398,7 +424,7 @@ cmd:option('-std_im_path','../data/tfd/train_test_files/train_0_std.png');
 cmd:option('-val_data_path','../data/tfd/train_test_files/test_0.txt')
 
 
-cmd:option('-limit',-1,'num of training data to read');
+cmd:option('-limit',132,'num of training data to read');
 
 cmd:option('-iterationsTest',1,'num of iterations to run');
 cmd:option('-batchSizeTest',132,'batch size');

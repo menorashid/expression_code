@@ -23,17 +23,21 @@ do
         self.b_range = {0.7,1.4};
         self.c_range = {-0.1,0.1};
 
-        self.out_dir_diff=args.out_dir_diff;
-        self.start_idx_face_blur=1;
+        -- self.out_dir_diff=args.out_dir_diff;
+        -- self.start_idx_face_blur=1;
         self.ratio_blur=args.ratio_blur;
         self.activation_upper=args.activation_upper;
-        -- self.lines_face_diff={};
 
-        -- if args.num_labels then
-        --     self.num_labels=args.num_labels;
-        -- else
-        --     self.num_labels=8;
-        -- end
+        -- set blurring parameters and nets
+        self.net=args.net;
+        self.net_gb=args.net_gb;
+        self.conv_size=args.conv_size
+        if self.conv_size then
+            self.gauss_layer,self.gauss_layer_small,self.up_layer,self.min_layer,self.max_layer=self:getHelperNets(2*self.conv_size+1,self.conv_size)
+        end
+
+        -- optimize flag
+        self.optimize=args.optimize;
 
         if args.input_size then
             self.input_size=args.input_size
@@ -66,7 +70,40 @@ do
         
         -- self.lines_face_diff=self.lines_face;
 
+        if self.optimize then
+            print ('OPTIMIZING');
+            self.training_images,self.training_labels,self.lines_face = self:loadTrainingImages();
+            print (self.training_images:size());
+            print (self.training_labels:size());
+        end
+
         print (#self.lines_face);
+        
+    end
+
+
+    function data:loadTrainingImages()
+        local im_all=torch.zeros(#self.lines_face,1,self.input_size[1]
+            ,self.input_size[2]);
+        local labels = torch.zeros(#self.lines_face);
+        local lines_face={};
+
+        local curr_idx=0
+        for line_idx=1,#self.lines_face do
+            local img_path_face=self.lines_face[line_idx][1];
+            local label_face=self.lines_face[line_idx][2];
+            local status_img_face,img_face=pcall(image.load,img_path_face);
+            if status_img_face then
+                curr_idx=curr_idx+1;
+                if img_face:size(2)~=self.input_size[1] then 
+                    img_face = image.scale(img_face,self.input_size[1],self.input_size[2]);
+                end
+                im_all[curr_idx]=img_face;
+                labels[curr_idx]=label_face;
+                lines_face[curr_idx]=self.lines_face[line_idx];
+            end
+        end
+        return im_all,labels,lines_face     
     end
 
     function data:unMean(mean,std)
@@ -84,26 +121,50 @@ do
     end 
 
     function data:getGCamEtc(net,net_gb,layer_to_viz,batch_inputs,batch_targets)
+
+        -- local time_blurry= os.clock();
         net:zeroGradParameters();
         net_gb:zeroGradParameters();
+        -- print ('time_zero',os.clock()-time_blurry);
 
+
+        
+
+        -- local time_blurry= os.clock();
         local outputs=net:forward(batch_inputs);
+        -- print ('time_forward net',os.clock()-time_blurry);
+        
+        -- local time_blurry= os.clock();
         local outputs_gb= net_gb:forward(batch_inputs);
+        -- print ('time_forward net gb',os.clock()-time_blurry);
+        
 
-        local scores, pred_labels = torch.max(outputs, 2);
-        pred_labels = pred_labels:type(batch_targets:type());
-        pred_labels = pred_labels:view(batch_targets:size());
+        -- print (net)
+        -- print (net_gb);
 
-        local doutput_pred = utils.create_grad_input_batch(net.modules[#net.modules], pred_labels)
-        local gcam_pred = utils.grad_cam_batch(net, layer_to_viz, doutput_pred);
-        net:zeroGradParameters();
+        -- local scores, pred_labels = torch.max(outputs, 2);
+        -- pred_labels = pred_labels:type(batch_targets:type());
+        -- pred_labels = pred_labels:view(batch_targets:size());
+
+        -- local doutput_pred = utils.create_grad_input_batch(net.modules[#net.modules], pred_labels)
+        -- local gcam_pred = utils.grad_cam_batch(net, layer_to_viz, doutput_pred);
+        -- net:zeroGradParameters();
+        -- local time_blurry= os.clock();
         local doutput_gt =  utils.create_grad_input_batch(net.modules[#net.modules], batch_targets)
-        local gcam_gt = utils.grad_cam_batch(net, layer_to_viz, doutput_gt);
+        -- print ('time_grad_batch',os.clock()-time_blurry);
 
-        local gb_viz_pred = net_gb:backward(batch_inputs, doutput_pred)
-        net_gb:zeroGradParameters();
+        -- local time_blurry= os.clock();
+        local gcam_gt = utils.grad_cam_batch(net, layer_to_viz, doutput_gt);
+        -- print ('grad_cam_batch',os.clock()-time_blurry);
+
+        -- local gb_viz_pred = net_gb:backward(batch_inputs, doutput_pred)
+        -- net_gb:zeroGradParameters();
+
+        -- local time_blurry= os.clock();
         local gb_viz_gt = net_gb:backward(batch_inputs, doutput_gt)
-        return {gcam_pred,gcam_gt},{gb_viz_pred,gb_viz_gt},pred_labels;
+        -- print ('gb_back',os.clock()-time_blurry);
+        -- return {gcam_pred,gcam_gt},{gb_viz_pred,gb_viz_gt},pred_labels;
+        return {gcam_gt,gcam_gt},{gb_viz_gt,gb_viz_gt},pred_labels;
         
     end
 
@@ -140,37 +201,77 @@ do
     end
 
 
-    function data:buildBlurryBatch(net,net_gb,layer_to_viz,activation_thresh,conv_size,strategy,out_file_pre)
+    function data:buildBlurryBatch(layer_to_viz,activation_thresh,strategy,out_file_pre)
         
         -- set nets mode
-        local train_state=net.train;
-        net:evaluate();
-        net_gb:evaluate();
+        -- local net = self.net;
+        -- local net_gb = self.net_gb;
+        local train_state=self.net.train;
+        
+        -- print ('net',self.net:type())
+        -- print ('net_gb',self.net_gb:type());
+
+        if self.net:type()~='torch.CudaTensor' then
+            self.net=self.net:cuda();
+        end
+        
+        if self.net_gb:type()~='torch.CudaTensor' then
+            self.net_gb=self.net_gb:cuda();
+        end
+        
+        if train_state then
+            self.net:evaluate();
+            self.net_gb:evaluate();
+        end
 
         -- build a batch of images 0 255 mean subtracted
+        -- local time_blurry= os.clock();
         self:getTrainingData();
+        -- print ('time_getTraining',os.clock()-time_blurry);
 
         -- set cuda
+        -- local time_blurry= os.clock();
         self.training_set.data = self.training_set.data:cuda();
         self.training_set.label = self.training_set.label:cuda();
         local batch_inputs = self.training_set.data;
         local batch_targets = self.training_set.label;
-        self.mean_batch = self.mean_batch:cuda();
-        self.std_batch = self.std_batch:cuda();
+        
+        if self.mean_batch:type()~='torch.CudaTensor' then
+            -- print (self.mean_batch:type())
+            self.mean_batch = self.mean_batch:cuda();
+            self.std_batch = self.std_batch:cuda();
+        end
+        -- print ('time_movecuda',os.clock()-time_blurry);
 
         -- get helper nets
-        local gauss_layer,gauss_layer_small,up_layer,min_layer,max_layer = self:getHelperNets(2*conv_size+1,conv_size);
+        -- local time_blurry= os.clock();
         
+        local gauss_layer = self.gauss_layer;
+        local gauss_layer_small = self.gauss_layer_small;
+        local up_layer = self.up_layer;
+        local min_layer = self.min_layer;
+        local max_layer = self.max_layer;
+         -- = self:getHelperNets(2*conv_size+1,conv_size);
+        -- print ('time_helpernets',os.clock()-time_blurry);
+
         -- get gcam stuff
-        local gcam_both,gb_viz_both,pred_labels = self:getGCamEtc(net,net_gb,layer_to_viz,batch_inputs,batch_targets)
+        -- local time_blurry= os.clock();
+        local gcam_both,gb_viz_both,pred_labels = self:getGCamEtc(self.net,self.net_gb,layer_to_viz,batch_inputs,batch_targets)
+        -- print ('time_gcametc',os.clock()-time_blurry);
 
         -- set input range between 0-1 again
+        -- local time_blurry= os.clock();
         local inputs_org=self:unMean(self.mean_batch,self.std_batch):div(255)
+        -- print ('time_unMean',os.clock()-time_blurry);
+
         -- create input with blur
+        -- local time_blurry= os.clock();
         local inputs_blur=gauss_layer:forward(inputs_org);
         inputs_blur:cdiv(max_layer:forward(inputs_blur:csub(min_layer:forward(inputs_blur))));
-        
+        -- print ('time_blur',os.clock()-time_blurry);
+
         -- get activations
+        -- local time_blurry= os.clock();
         local gcam_curr = gcam_both[2];
         local gb_viz_curr = gb_viz_both[2]
         gcam_curr = up_layer:forward(gcam_curr);
@@ -186,8 +287,9 @@ do
         if self.ratio_blur then
             im_num_end_blur=inputs_org:size(1)*self.ratio_blur;
         end
-        
+        -- print ('time_activation_pre_processing',os.clock()-time_blurry);        
 
+        -- local time_blurry= os.clock();
         for im_num =1, inputs_org:size(1) do
             if im_num<=im_num_end_blur then
                 local activation_thresh_curr;
@@ -213,8 +315,10 @@ do
                 vals_all[im_num][1]:fill(max_val+1);
             end
         end
-        
+        -- print ('time_getvals',os.clock()-time_blurry);
+
         -- create masks and blur
+        -- local time_blurry= os.clock();
         gb_gcam_th_all[gb_gcam_all:ge(vals_all)]=1;
         gb_gcam_th_all[gb_gcam_all:lt(vals_all)]=0;
         gb_gcam_th_all=gauss_layer_small:forward(gb_gcam_th_all);
@@ -229,6 +333,7 @@ do
         
         self.training_set.data = im_blur_all;
         self.training_set.label = batch_targets;
+        -- print ('time_makeBlurry',os.clock()-time_blurry);
 
         if out_file_pre then
             im_blur_all=self:unMean(self.mean_batch,self.std_batch);
@@ -268,10 +373,10 @@ do
         end
 
         -- set nets back
-        if train_state then
-            net:training();
-            net_gb:training();
-        end
+        -- if train_state then
+        --     net:training();
+        --     net_gb:training();
+        -- end
 
 
     end
@@ -290,6 +395,30 @@ do
         return lines2;
     end
 
+
+    function data:shuffleLinesOptimizing(lines,im,labels)
+        local x=lines;
+        local len=#lines;
+
+        local shuffle = torch.randperm(len)
+        
+        local im_2=im:clone();
+        local labels_2=labels:clone();
+
+        local lines2={};
+        for idx=1,len do
+            lines2[idx]=x[shuffle[idx]];
+            im_2[idx]=im[shuffle[idx]];
+            labels_2[idx]=labels[shuffle[idx]];
+        end
+        im=0;
+        labels=0;
+        lines=0;
+        return lines2,im_2,labels_2;
+    end
+
+
+
     function data:getTrainingData()
         
         local start_idx_face_before = self.start_idx_face
@@ -299,12 +428,15 @@ do
         self.training_set.label=torch.zeros(self.batch_size);
         self.training_set.input={};
         
-        self.start_idx_face=self:addTrainingData(self.training_set,self.batch_size,
-            self.lines_face,self.start_idx_face)    
+        self.start_idx_face=self:addTrainingData(self.training_set,self.batch_size,self.start_idx_face)    
 
-        if self.start_idx_face<start_idx_face_before and self.augmentation then
+        if self.start_idx_face<=start_idx_face_before and self.augmentation then
             print ('shuffling data'..self.start_idx_face..' '..start_idx_face_before )
-            self.lines_face=self:shuffleLines(self.lines_face);
+            if not self.optimize then
+                self.lines_face=self:shuffleLines(self.lines_face);
+            else
+                self.lines_face,self.training_images,self.training_labels=self:shuffleLinesOptimizing(self.lines_face,self.training_images,self.training_labels);
+            end
         end
 
     end
@@ -396,19 +528,27 @@ do
         return img_face
     end
 
-    function data:addTrainingData(training_set,batch_size,lines_face,start_idx_face,curr_idx)
+    function data:addTrainingData(training_set,batch_size,start_idx_face,curr_idx)
         local list_idx=start_idx_face;
-        local list_size=#lines_face;
+        local list_size=#self.lines_face;
         -- local 
         if not curr_idx then
             curr_idx=1;
         end
 
         while curr_idx<= batch_size do
-            local img_path_face=lines_face[list_idx][1];
-            local label_face=lines_face[list_idx][2];
-            
-            local status_img_face,img_face=pcall(image.load,img_path_face);
+            local img_path_face,label_face,status_img_face,img_face;
+            if self.optimize then
+                -- print ('optimized');
+                status_img_face=true;
+                img_path_face=self.lines_face[list_idx];
+                label_face=self.training_labels[list_idx];
+                img_face=self.training_images[list_idx]:clone();
+            else
+                img_path_face=self.lines_face[list_idx][1];
+                label_face=self.lines_face[list_idx][2];
+                status_img_face,img_face=pcall(image.load,img_path_face);
+            end
             
             if status_img_face then
                 img_face=self:processIm(img_face)

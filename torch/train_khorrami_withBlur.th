@@ -52,7 +52,7 @@ function doTheUpdate(td,net,criterion,parameters,gradParameters,optimMethod,opti
     if activationThresh>0 then
         assert (net_gb);
         -- print (activationThresh);
-        td:buildBlurryBatch(net,net_gb,params.layer_to_viz,activationThresh,params.conv_size,params.scheme)
+        td:buildBlurryBatch(params.layer_to_viz,activationThresh,params.scheme)
         batch_inputs=td.training_set.data;
         batch_targets=td.training_set.label;
     else
@@ -331,8 +331,13 @@ function main(params)
 					augmentation=params.augmentation,
 					limit=params.limit,
                     ratio_blur=params.ratioBlur,
-                    activation_upper=params.activationThreshMax
+                    activation_upper=params.activationThreshMax,
+                    conv_size=params.conv_size,
+                    net=net:clone(),
+                    net_gb=net_gb:clone(),
+                    optimize=params.optimize
                     };
+
 
 	local td=data_face(data_params);
 
@@ -392,8 +397,10 @@ function main(params)
     for i=1,params.iterations do
 
         -- local minibatch_loss = doTheUpdate(td,net,criterion,parameters,gradParameters,optimMethod,optimStateTotal)
-        -- print (activationThresh);        
+        -- print (activationThresh);    
+        local time_update=os.clock();    
         local minibatch_loss = doTheUpdate(td,net,criterion,parameters,gradParameters,optimMethod,optimStateTotal,activationThresh,net_gb,params)
+        time_update=os.clock()-time_update;
         if minibatch_loss>3 then
             minibatch_loss=3;
         end
@@ -402,7 +409,7 @@ function main(params)
         losses_iter[#losses_iter +1] = i;
 
         if i%params.dispAfter==0 then
-        	local disp_str=string.format("lr: %6s, at: %6s, minibatches processed: %6s, loss = %6.6f", optimState.learningRate,activationThresh,i, losses[#losses])
+        	local disp_str=string.format("lr: %6s, at: %6.6f, time: %6.6f, minibatches processed: %6s, loss = %6.6f", optimState.learningRate,activationThresh,time_update,i, losses[#losses])
             logger:writeString(dump.tostring(disp_str)..'\n');
             print (disp_str);
 
@@ -468,6 +475,15 @@ function main(params)
         end
 
         if params.incrementDifficultyAfter and i%params.incrementDifficultyAfter==0 then
+            -- local net_gb= net:clone();
+            -- net_gb:replace(utils.guidedbackprop);
+            -- net_gb = net_gb:cuda();
+            net:clearState();
+            td.net=net:clone():cuda();
+            td.net_gb=net:clone();
+            td.net_gb:replace(utils.guidedbackprop);
+            td.net_gb = td.net_gb:cuda();
+
             activationThresh=activationThresh+activationThresh_increment;
         end
 
@@ -486,6 +502,7 @@ function main(params)
         -- end
 
         -- break;
+        collectgarbage();
 	end
 
     -- save final model
@@ -512,10 +529,10 @@ cmd:text('Options')
 
 local epoch_size=10;
 local scheme = 'ncl';
-local temp ='../experiments/khorrami_withBlur_test/'..scheme;
+local temp ='../experiments/khorrami_withBlur_test/fix_'..scheme;
 
 
-cmd:option('-model','../models/base_khorrami_model_7.dat');
+cmd:option('-model','../models/base_khorrami_model_8.dat');
 cmd:option('-mean_im_path','../data/ck_96/train_test_files/train_0_mean.png');
 cmd:option('-std_im_path','../data/ck_96/train_test_files/train_0_std.png');
 
@@ -528,10 +545,11 @@ cmd:option('-activationThreshMax',0.5);
 cmd:option('-scheme',scheme);
 cmd:option('-conv_size',5);
 cmd:option('-layer_to_viz',8);
+cmd:option('-optimize',true);
 -- cmd:option('-overwrite',true);
 
 cmd:option('-saveAfter',10*epoch_size,'num of iterations after which to save model');
-cmd:option('-batchSize',64,'batch size');
+cmd:option('-batchSize',128,'batch size');
 cmd:option('-testAfter',10*epoch_size,'num iterations after which to get validation loss');
 cmd:option('-dispAfter',1,'num iterations after which to display training loss');
 cmd:option('-dispPlotAfter',10*epoch_size,'num iterations after which to display training loss');
