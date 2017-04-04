@@ -1,6 +1,6 @@
 require 'image'
 npy4th = require 'npy4th'
-require 'data_face';
+require 'data_face_meanFirst';
 require 'cunn'
 require 'cudnn'
 require 'nn';
@@ -337,7 +337,7 @@ function testTwoListData(params)
                 augmentation=false,
                 limit=params.limit,
                 out_dir_diff=out_dir_diff,
-                ratio_blur=1,
+                ratio_blur=0.5,
                 activation_upper=0.5,
                 conv_size=5,
                 net=net:clone(),
@@ -347,23 +347,23 @@ function testTwoListData(params)
 
 	local vd=data_face(data_params);
 	
-	local time_blurry = os.clock()
-	vd:buildBlurryBatch(params.layer_to_viz,0.05,'ncl');
-	print ('time_blurry',os.clock()-time_blurry);
-
-	local time_blurry = os.clock()
-	vd:buildBlurryBatch(params.layer_to_viz,0.05,'ncl');
-	print ('time_blurry',os.clock()-time_blurry);
+	-- local time_blurry = os.clock()
+	-- vd:buildBlurryBatch(params.layer_to_viz,0.05,'ncl');
+	-- print ('time_blurry',os.clock()-time_blurry);
 
 	-- local time_blurry = os.clock()
-	-- vd:buildBlurryBatch(params.layer_to_viz,0.05,'ncl',out_file_pre);
-	-- -- ,out_file_pre);
+	-- vd:buildBlurryBatch(params.layer_to_viz,0.05,'ncl');
 	-- print ('time_blurry',os.clock()-time_blurry);
 
 	local time_blurry = os.clock()
-	vd:buildBlurryBatch(params.layer_to_viz,0.05,'ncl');
+	vd:buildBlurryBatch(params.layer_to_viz,0.05,'ncl',out_file_pre);
 	-- ,out_file_pre);
 	print ('time_blurry',os.clock()-time_blurry);
+
+	-- local time_blurry = os.clock()
+	-- vd:buildBlurryBatch(params.layer_to_viz,0.05,'ncl');
+	-- -- ,out_file_pre);
+	-- print ('time_blurry',os.clock()-time_blurry);
 
 
 	local batch_targets=vd.training_set.label;
