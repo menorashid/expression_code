@@ -89,10 +89,11 @@ def writeCKScripts():
 
 def writeTFDSchemeScripts():
     
-    experiment_name='khorrami_basic_tfd_schemes_halfBlur';
+    experiment_name='khorrami_basic_tfd_schemes_fullBlur';
     out_dir_meta='../experiments/'+experiment_name;
     util.mkdir(out_dir_meta);
-    out_script='../scripts/train_'+experiment_name+'.sh';
+    out_script='../scripts/train_'+experiment_name;
+    # +'.sh';
     path_to_th='train_khorrami_withBlur.th';
 
     dir_files='../data/tfd/train_test_files';
@@ -103,20 +104,16 @@ def writeTFDSchemeScripts():
     learningRate = 0.01;
     batchSizeTest=128;
     batchSize=128;
-    ratioBlur=0.5;
-    schemes=['ncl','mix','mixcl'];
+    ratioBlur=1.0;
+    schemes=['mix','mixcl'];
     
-    
+    num_scripts=1;
     # print '{',
-    for scheme in schemes:
-
-        out_dir_meta_curr=os.path.join(out_dir_meta,scheme);
-        util.mkdir(out_dir_meta_curr)
-
-        commands=[];
-        for fold_num in range(num_folds):
-            out_script='../scripts/train_'+experiment_name+'_'+scheme+'.sh';
-
+    commands=[];
+    for fold_num in range(num_folds):
+        for scheme in schemes:
+            out_dir_meta_curr=os.path.join(out_dir_meta,scheme);
+            util.mkdir(out_dir_meta_curr)
             data_path=os.path.join(dir_files,'train_'+str(fold_num)+'.txt');
             val_data_path=os.path.join(dir_files,'test_'+str(fold_num)+'.txt');
             mean_im_path=os.path.join(dir_files,'train_'+str(fold_num)+'_mean.png');
@@ -146,7 +143,7 @@ def writeTFDSchemeScripts():
             
             command = command+['learningRate',learningRate];
 
-            command = command+['-iterations',750*epoch_size];
+            command = command+['-iterations',1000*epoch_size];
             command = command+['-saveAfter',100*epoch_size];
             command = command+['-testAfter',10*epoch_size];
             command = command+['-dispAfter',1*epoch_size];
@@ -167,8 +164,19 @@ def writeTFDSchemeScripts():
             # print command;
             commands.append(command);
         # print '}';
-        print out_script
-        util.writeFile(out_script,commands);
+    print out_script
+
+    commands=np.array(commands);
+    commands_split=np.array_split(commands,num_scripts);
+    for idx_commands,commands in enumerate(commands_split):
+        out_file_script_curr=out_script+'_'+str(idx_commands)+'.sh';
+        print idx_commands
+        print out_file_script_curr
+        # print commands;
+        util.writeFile(out_file_script_curr,commands);
+
+
+    # util.writeFile(out_script,commands);
 
 
 def makeHTML_withPosts(out_file_html,im_dirs,num_ims_all,im_posts,gt_labels_all,pred_labels_all):
@@ -282,8 +290,8 @@ def writeTestGradCamScript():
     util.writeFile(out_script,commands);
 
 def main():
-    # writeTFDSchemeScripts();
-    writeCKScripts();
+    writeTFDSchemeScripts();
+    # writeCKScripts();
     # writeTestGradCamScript()
     # script_vizTestGradCam();
 

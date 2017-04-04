@@ -309,7 +309,16 @@ do
                 
                 local gb_gcam = gb_gcam_all[im_num][1];
                 local gb_gcam_vals = torch.sort(gb_gcam:view(-1),1,true);
-                local val = gb_gcam_vals[math.floor(gb_gcam_vals:size(1)*activation_thresh_curr)];
+                -- local idx_gb_gcam_vals=0;
+                local idx_gb_gcam_vals=math.floor(gb_gcam_vals:size(1)*activation_thresh_curr)
+                -- if idx_gb_gcam_vals==0 then
+                --     print ('GOT A ZERo');
+                --     print (activation_thresh_curr,gb_gcam_vals:size(1),idx_gb_gcam_vals);
+                -- end
+                idx_gb_gcam_vals=math.max(1,idx_gb_gcam_vals);
+                
+                
+                local val = gb_gcam_vals[idx_gb_gcam_vals];
                 vals_all[im_num][1]:fill(val);
             else
                 vals_all[im_num][1]:fill(max_val+1);
@@ -539,7 +548,6 @@ do
         while curr_idx<= batch_size do
             local img_path_face,label_face,status_img_face,img_face;
             if self.optimize then
-                -- print ('optimized');
                 status_img_face=true;
                 img_path_face=self.lines_face[list_idx];
                 label_face=self.training_labels[list_idx];

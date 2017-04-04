@@ -528,8 +528,10 @@ cmd:text()
 cmd:text('Options')
 
 local epoch_size=10;
-local scheme = 'ncl';
-local temp ='../experiments/khorrami_withBlur_test/fix_'..scheme;
+local scheme = nil;
+-- 'ncl';
+local temp =nil
+-- '../experiments/khorrami_withBlur_test/fix_'..scheme;
 
 
 cmd:option('-model','../models/base_khorrami_model_8.dat');
