@@ -5,8 +5,12 @@ import os;
 import visualize;
 import scipy;
 import scipy.io;
+import multiprocessing;
+import subprocess;
 dir_server='/home/SSD3/maheen-data/';
 click_str='http://vision1.idav.ucdavis.edu:1000/';
+import urllib
+import time;
 
 def saveCroppedFace(in_file,out_file,im_size=None,classifier_path=None,savegray=True):
     if classifier_path==None:
@@ -358,13 +362,94 @@ def sanityCheckTFD():
             print fold_num,fold_num_test,len(lines_train),len(lines_test);
             print np.sum(np.in1d(lines_test,lines_train));
 
+
+def downloadImage((url,im_out,im_num)):
+    if im_num%100==0:
+        print im_num;
+    try:
+        # t=time.time();
+        downloader=urllib.URLopener()
+        # print time.time()-t;
+        # t=time.time();
+        downloader.retrieve(url, im_out)
+        # print time.time()-t;
+    except:
+        pass;
+
+def downloadEmotionetDataset():
+    dir_files='../data/emotionet/emotioNet_URLs'
+    file_pre='emotioNet_'
+    out_dir_meta='../data/emotionet';
+
+    file_posts=range(1,9);
+
+    out_file_commands=os.path.join('../scripts/downloading_commands.sh');
+    commands=[];
+    for file_post in file_posts:
+        file_curr=os.path.join(dir_files,file_pre+str(file_post)+'.txt');
+        out_dir_curr=os.path.join(out_dir_meta,file_pre+str(file_post));
+        util.mkdir(out_dir_curr);
+
+        print file_curr;
+        urls=util.readLinesFromFile(file_curr);
+        # urls=urls[:1000];
+        
+        args=[];
+        for idx_url,url in enumerate(urls):
+            out_file_curr=os.path.join(out_dir_curr,str(idx_url)+'.jpg');
+            if os.path.exists(out_file_curr):
+                continue;
+            args.append((url,out_file_curr,idx_url));
+            # out_files=[os.path.join(out_dir_curr,str(im_num)+'.jpg') for im_num in range(len(urls))];
+
+        # args=zip(urls,out_files,range(len(urls)));
+        # for arg_curr in args[:10]:
+        #     downloadImage(arg_curr);        
+        print len(urls),len(args);
+        args=args[:100];
+        file_for_wget=os.path.join(out_dir_curr,'wget_file.txt');
+        lines=['wget --tries=1 -q --timeout=15 '+util.escapeString(url)+' -O '+out_file for url,out_file,num in args];
+        util.writeFile(file_for_wget,lines);
+        # # commands.append('cat '+file_for_wget+'| parallel -j20');
+        t=time.time();
+        # # print 'cat '+file_for_wget+'| head -5 | parallel -j20'
+        os.system('cat '+file_for_wget+'| parallel -j20');
+        print time.time()-t;
+        # print file_for_wget;
+
+        # t=time.time();
+        # p.map(downloadImage,args);
+        # print (time.time()-t);
+        # print args[:10];
+
+
+        # total_len=len(ims);
+        # ims_name=[os.path.split(line_curr)[1] for line_curr in ims];
+        # ims_ends=[im_curr[im_curr.rindex('.'):] for im_curr in ims_name if '.' in im_curr];
+        # print total_len-len(ims_ends);
+        # ims_ends=list(set(ims_ends));
+        # print len(ims_ends);
+        # for im_end in ims_ends:
+        #     print im_end;
+        # break;
+        # print total_len,len(set(ims_name)),len(set(ims_name))==total_len
+        # assert len(set(ims_name))==total_len;
+    # print out_file_commands
+    # util.writeFile(out_file_commands,commands);
+
+    #     
+    # p.map(saveBBoxIm,args);
+    # p.map(saveBBoxNpy,args_bbox_npy);
+
+
+
+
 def main():
-    out_dir_meta='../data/tfd';
-    num_folds=5;
-    anno_file=os.path.join(out_dir_meta,'anno_all.txt');
-    annos=[int(line_curr.split(' ')[1]) for line_curr in util.readLinesFromFile(anno_file)];
-    print set(annos)
-    print len(set(annos))
+    url='http://image.pixmac.com/4/horror-dark-emotion-young-girl-face-abstract-pixmac-image-86178608.jpg';
+    url = 'https://sassafrasjunction.files.wordpress.com/2011/02/girl-scout.gif';
+    out_file='../scratch/test.jpg';
+    # downloadImage((url,out_file,1));
+    downloadEmotionetDataset();
 
     
     

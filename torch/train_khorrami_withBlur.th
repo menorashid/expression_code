@@ -1,6 +1,6 @@
 require 'image'
 npy4th = require 'npy4th'
-require 'data_face';
+require 'data_face_meanFirst';
 require 'cunn'
 require 'cudnn'
 require 'nn';
@@ -121,6 +121,11 @@ function test(params)
     net = net:cuda();
     net:evaluate();
 
+    local net_gb= net:clone();
+    net_gb:replace(utils.guidedbackprop);
+    net_gb = net_gb:cuda();
+    net_gb:evaluate();
+
     logger:writeString(dump.tostring('done')..'\n');
     -- print ('done');
 
@@ -129,7 +134,15 @@ function test(params)
                     mean_file=params.mean_im_path,
                     std_file=params.std_im_path,
                     augmentation=false,
-                    limit=params.limit};
+                    limit=params.limit,
+                    ratio_blur=nil,
+                    conv_size=params.conv_size,
+                    net=net:clone(),
+                    net_gb=net_gb:clone(),
+                    optimize=params.optimize
+                    };
+
+
     -- print (data_params);
     local vd=data_face(data_params);
     -- local criterion_weights;
@@ -148,7 +161,9 @@ function test(params)
     local accuracy={};
     local val_losses_iter={};
     for i=1,params.iterationsTest do
-        vd:getTrainingData();
+        -- vd:getTrainingData();
+        local out_file_pre=paths.concat(out_dir_images,i..'_');
+        vd:buildBlurryBatch(params.layer_to_viz,0.05,'ncl',out_file_pre)
         vd.training_set.data=vd.training_set.data:cuda();
         vd.training_set.label=vd.training_set.label:cuda();
         local batch_inputs=vd.training_set.data;
@@ -528,10 +543,8 @@ cmd:text()
 cmd:text('Options')
 
 local epoch_size=10;
-local scheme = nil;
--- 'ncl';
-local temp =nil
--- '../experiments/khorrami_withBlur_test/fix_'..scheme;
+local scheme = 'ncl';
+local temp ='../experiments/khorrami_withBlur_test/fix_'..scheme;
 
 
 cmd:option('-model','../models/base_khorrami_model_8.dat');

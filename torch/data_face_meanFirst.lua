@@ -3,6 +3,7 @@ do
     local data = torch.class('data_face')
 
     function data:__init(args)
+        print ('MEAN FIRST');
         self.file_path=args.file_path;
         self.batch_size=args.batch_size;
         self.mean_file=args.mean_file;

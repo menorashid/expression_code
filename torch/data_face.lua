@@ -282,7 +282,8 @@ do
         local gb_gcam_th_all =torch.zeros(gb_gcam_all:size()):type(gb_gcam_all:type());
         local vals_all = gb_gcam_th_all:clone();
     
-        local im_num_end_blur=inputs_org:size(1);
+        local im_num_end_blur=0
+        -- inputs_org:size(1);
         local max_val = torch.max(gb_gcam_all);
         if self.ratio_blur then
             im_num_end_blur=inputs_org:size(1)*self.ratio_blur;

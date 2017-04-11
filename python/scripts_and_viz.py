@@ -89,7 +89,8 @@ def writeCKScripts():
 
 def writeTFDSchemeScripts():
     
-    experiment_name='khorrami_basic_tfd_schemes_fullBlur';
+    # experiment_name='khorrami_basic_tfd_schemes_fullBlur';
+    experiment_name='khorrami_basic_tfd_schemes_noBlur_meanFirst';
     out_dir_meta='../experiments/'+experiment_name;
     util.mkdir(out_dir_meta);
     out_script='../scripts/train_'+experiment_name;
@@ -104,9 +105,11 @@ def writeTFDSchemeScripts():
     learningRate = 0.01;
     batchSizeTest=128;
     batchSize=128;
-    ratioBlur=1.0;
+    ratioBlur=0.0;
     schemes=['mix','mixcl'];
-    
+    # incrementDifficultyAfter=10*epoch_size;
+    incrementDifficultyAfter=0;
+    schemes=['noBlur_meanFirst'];
     num_scripts=1;
     # print '{',
     commands=[];
@@ -179,22 +182,22 @@ def writeTFDSchemeScripts():
     # util.writeFile(out_script,commands);
 
 
-def makeHTML_withPosts(out_file_html,im_dirs,num_ims_all,im_posts,gt_labels_all,pred_labels_all):
+def makeHTML_withPosts(out_file_html,im_dirs,num_ims_all,im_posts,gt_labels_all,pred_labels_all,num_batches=[1]):
     im_list=[];
     caption_list=[];
 
     for im_dir,num_ims,gt_labels,pred_labels in zip(im_dirs,num_ims_all,gt_labels_all,pred_labels_all):
-
         for num_im in num_ims:
-            ims=['1_'+str(num_im)+im_post_curr for im_post_curr in im_posts]
-            im_list_curr=[util.getRelPath(os.path.join(im_dir,im_curr),dir_server) for im_curr in ims];
-            gt=gt_labels[num_im-1];
-            pred=pred_labels[num_im-1];
-            caption_curr='right' if gt==pred else 'wrong';
-            caption_curr=caption_curr+' '+str(gt)+' '+str(pred);
-            caption_list_curr=[caption_curr+' '+im_curr[:im_curr.rindex('.')].lstrip('_') for im_curr in im_posts];
-            caption_list.append(caption_list_curr);
-            im_list.append(im_list_curr);
+            for num_batch in num_batches:
+                ims=[str(num_batch)+'_'+str(num_im)+im_post_curr for im_post_curr in im_posts]
+                im_list_curr=[util.getRelPath(os.path.join(im_dir,im_curr),dir_server) for im_curr in ims];
+                gt=gt_labels[num_im-1];
+                pred=pred_labels[num_im-1];
+                caption_curr='right' if gt==pred else 'wrong';
+                caption_curr=caption_curr+' '+str(gt)+' '+str(pred);
+                caption_list_curr=[caption_curr+' '+im_curr[:im_curr.rindex('.')].lstrip('_') for im_curr in im_posts];
+                caption_list.append(caption_list_curr);
+                im_list.append(im_list_curr);
 
     visualize.writeHTML(out_file_html,im_list,caption_list);
 
@@ -252,6 +255,79 @@ def script_vizTestGradCam():
     makeHTML_withPosts(out_file_html,im_dirs,num_ims_all,im_posts,gt_labels_all,pred_labels_all);
     print out_file_html.replace(dir_server,click_str);
 
+def script_vizCompareActivations():
+    dir_meta_pre=os.path.join(dir_server,'expression_project','experiments');
+    out_dir_metas=[os.path.join(dir_meta_pre,'khorrami_basic_tfd_schemes_halfBlur/ncl'),os.path.join(dir_meta_pre,'khorrami_basic_tfd_resume_again')];
+    test_pre='../data/tfd/train_test_files/test_';
+    
+    pres=['_gb_gcam_org_','_hm_'];
+    pres=['_gb_gcam_th_','_gb_gcam_','_gaussian_','_blur_'];
+    # pres=['_gb_gcam_th_','_gb_gcam_','_gaussian_','_blur_'];
+    pres=['_gb_gcam','_hm','_gb_gcam_org','_gb_gcam_th','_gaussian','_blur']
+
+    im_posts=['_org.jpg']+[pre+'.jpg' for pre in pres];
+    # [pre+exp_curr+'.jpg' for pre in pres for exp_curr in expressions]; 
+    out_file_html=os.path.join(out_dir_metas[0],'comparison.html');
+    
+    num_batches=range(1,7+1);
+
+    im_dirs=[];
+    num_ims_all=[];
+    gt_labels_all=[];
+    pred_labels_all=[];
+    
+    fold_num=0;
+
+    for out_dir_meta in out_dir_metas:
+        out_dir=os.path.join(out_dir_meta,str(fold_num));
+        # out_dir=out_dir_meta;
+        # out_file_html=out_dir+'.html';
+        # im_dir=os.path.join(out_dir,'images');
+        im_dir=os.path.join(out_dir,'test_images');
+        # out_file_html=os.path.join(out_dir,os.path.split(out_dir)[1]+'.html');
+        
+        # pred_labels=np.load(os.path.join(out_dir,npy_file)).astype(int);
+        gt_data=util.readLinesFromFile(test_pre+str(fold_num)+'.txt')
+        gt_labels=np.array([int(line_curr.split(' ')[1]) for line_curr in gt_data])+1;
+        pred_labels = gt_labels;
+
+        num_ims=list(range(1,128+1));
+        im_dirs.append(im_dir)
+        num_ims_all.append(num_ims);
+        gt_labels_all.append(gt_labels);
+        pred_labels_all.append(os.path.split(out_dir_meta)[1][:3]);
+    
+
+    im_list=[];
+    caption_list=[];
+
+    for num_batch in num_batches:
+        for num_im in num_ims:
+            for im_dir,gt_labels,type_scheme in zip(im_dirs,gt_labels_all,pred_labels_all):
+                ims=[str(num_batch)+'_'+str(num_im)+im_post_curr for im_post_curr in im_posts]
+                im_list_curr=[util.getRelPath(os.path.join(im_dir,im_curr),dir_server) for im_curr in ims];
+                gt_idx=128*(num_batch-1)+(num_im-1);
+                # print gt_idx;
+                if gt_idx>=len(gt_labels):
+                    break;
+                    # print num_batch,num_im
+                    # raw_input();
+                gt=gt_labels[gt_idx];
+                # pred=pred_labels[num_im-1];
+                caption_curr=str(num_batch)+'_'+str(num_im)+' '+str(gt)+' '+type_scheme;
+                # 'right' if gt==pred else 'wrong';
+                # caption_curr=caption_curr+' '+str(gt)+' '+str(pred);
+                caption_list_curr=[caption_curr+' '+im_curr[:im_curr.rindex('.')].lstrip('_') for im_curr in im_posts];
+                caption_list.append(caption_list_curr);
+                im_list.append(im_list_curr);
+
+    visualize.writeHTML(out_file_html,im_list,caption_list);
+
+    # makeHTML_withPosts(out_file_html,im_dirs,num_ims_all,im_posts,gt_labels_all,pred_labels_all);
+    print out_file_html.replace(dir_server,click_str);
+
+
+
 def writeTestGradCamScript():
     num_folds=10;
 
@@ -290,6 +366,7 @@ def writeTestGradCamScript():
     util.writeFile(out_script,commands);
 
 def main():
+    # script_vizCompareActivations()
     writeTFDSchemeScripts();
     # writeCKScripts();
     # writeTestGradCamScript()
