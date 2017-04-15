@@ -1,15 +1,19 @@
 import numpy as np;
-import cv2;
+# import cv2;
 import util;
 import os;
 import visualize;
-import scipy;
-import scipy.io;
+# import scipy;
+# import scipy.io;
 import multiprocessing;
-import subprocess;
+# import subprocess;
+import sys;
+import random;
+import re;
+import csv;
 dir_server='/home/SSD3/maheen-data/';
 click_str='http://vision1.idav.ucdavis.edu:1000/';
-import urllib
+# import urllib
 import time;
 
 def saveCroppedFace(in_file,out_file,im_size=None,classifier_path=None,savegray=True):
@@ -367,111 +371,469 @@ def downloadImage((url,im_out,im_num)):
     if im_num%100==0:
         print im_num;
     try:
-        # t=time.time();
-        downloader=urllib.URLopener()
-        # print time.time()-t;
-        # t=time.time();
-        downloader.retrieve(url, im_out)
-        # print time.time()-t;
+        line_curr='wget --tries=2 -q --timeout=30 '+util.escapeString(url)+' -O '+im_out 
+        os.system(line_curr);
     except:
         pass;
 
 def downloadEmotionetDataset():
+    # file_post):
     dir_files='../data/emotionet/emotioNet_URLs'
     file_pre='emotioNet_'
     out_dir_meta='../data/emotionet';
 
-    file_posts=range(1,9);
-
-    out_file_commands=os.path.join('../scripts/downloading_commands.sh');
+    file_posts=range(1,10);
     commands=[];
     for file_post in file_posts:
-        file_curr=os.path.join(dir_files,file_pre+str(file_post)+'.txt');
         out_dir_curr=os.path.join(out_dir_meta,file_pre+str(file_post));
         util.mkdir(out_dir_curr);
+        lock=os.path.join(out_dir_curr,'lock');
+        if os.path.exists(lock):
+            print 'exists ',file_post
+            time.sleep(5*random.random());
+            continue;
 
+        util.mkdir(lock);
+
+        # t=time.time();
+        # time.sleep(120);
+        # print file_post,time.time()-t;
+
+        file_curr=os.path.join(dir_files,file_pre+str(file_post)+'.txt');
+        
         print file_curr;
         urls=util.readLinesFromFile(file_curr);
-        # urls=urls[:1000];
         
-        args=[];
+        args_all=[];
         for idx_url,url in enumerate(urls):
             out_file_curr=os.path.join(out_dir_curr,str(idx_url)+'.jpg');
             if os.path.exists(out_file_curr):
                 continue;
-            args.append((url,out_file_curr,idx_url));
-            # out_files=[os.path.join(out_dir_curr,str(im_num)+'.jpg') for im_num in range(len(urls))];
+            args_all.append((url,out_file_curr,idx_url));
+        
+        print len(urls),len(args_all);
+        print len(args_all);
 
-        # args=zip(urls,out_files,range(len(urls)));
-        # for arg_curr in args[:10]:
-        #     downloadImage(arg_curr);        
-        print len(urls),len(args);
-        args=args[:100];
-        file_for_wget=os.path.join(out_dir_curr,'wget_file.txt');
-        lines=['wget --tries=1 -q --timeout=15 '+util.escapeString(url)+' -O '+out_file for url,out_file,num in args];
-        util.writeFile(file_for_wget,lines);
-        # # commands.append('cat '+file_for_wget+'| parallel -j20');
+        idx_range=list(range(0,len(args_all),min(10000,len(args_all)-1)));
+        idx_range.append(len(args_all));
+        total=0;
+        for idx_idx_range in range(len(idx_range)-1):
+            start_idx=idx_range[idx_idx_range];
+            end_idx=idx_range[idx_idx_range+1];
+            args=args_all[start_idx:end_idx]
+            print start_idx,end_idx,len(args);
+            total=len(args)+total;
+
+            print multiprocessing.cpu_count()
+            p=multiprocessing.Pool(multiprocessing.cpu_count())
+            #     # 8);
+            t=time.time();
+            p.map(downloadImage,args);
+            print (time.time()-t);
+
+        print len(args_all),total;
+    
+def viewDatasetEmotionet():
+
+    out_dir_meta=os.path.join('/home/SSD3/maheen-data/expression_project','data/emotionet');
+    file_pre='emotioNet_'
+    dir_files=file_pre+'URLs';
+    file_post='1';
+    file_text=os.path.join(out_dir_meta,dir_files,file_pre+file_post+'.txt');
+    htmls=util.readLinesFromFile(file_text)
+    htmls=htmls[:1000];
+    num_files=len(htmls);
+    files_all=[os.path.join(out_dir_meta,file_pre+file_post,str(file_num)+'.jpg') for file_num in range(num_files)];
+    
+    num_gifs=0;
+    for html in htmls:
+        if '.gif' in html:
+            num_gifs+=1
+
+    print num_files,num_gifs,num_gifs/float(num_files)
+    # files_all=files_all[:1000];
+    files_to_keep=[];
+    sizes=[];
+    for file_curr,html_link in zip(files_all,htmls):
+        if os.path.exists(file_curr):
+            size_curr=os.stat(file_curr).st_size
+            
+            if size_curr>5000 and '.gif' not in html_link:
+                #  and 
+             # and size_curr>2000:
+            #     print file_curr,html_link,size_curr
+                files_to_keep.append(file_curr);
+                sizes.append(size_curr);
+    out_file=os.path.join('../scratch/emotionet_size.jpg');
+    # print len(files_to_keep),num_files
+    # writeHTML(file_name,im_paths,captions,height=200,width=200)
+
+    print sizes[:10];
+    sizes=np.sort(sizes);
+    print sizes[:10];
+    
+    visualize.plotSimple([(range(len(sizes)),sizes)],out_file);
+    im_paths=[[util.getRelPath(file_curr,dir_server)] for file_curr in files_to_keep];
+    captions=[[''] for file_curr in files_to_keep];
+    out_file_html=os.path.join(out_dir_meta,'viz.html');
+    visualize.writeHTML(out_file_html,im_paths,captions);
+    print len(im_paths);
+    print out_file_html.replace(dir_server,click_str);
+
+
+def isValidImage((html,in_file)):
+    
+    if not os.path.exists(in_file):
+        return False;
+
+    # if '.gif' in html:
+    #     return False;
+    
+    if os.stat(in_file).st_size<3000:
+        return False;
+
+    return True;
+    # time.sleep(2*random.random());
+    # print num_file
+    # return num_file;
+
+def getListOfValidImagesEmotionet():
+    # out_dir_meta=os.path.join('/home/SSD3/maheen-data/expression_project','data/emotionet');
+    out_dir_meta = '../data/emotionet';
+    file_pre='emotioNet_'
+    dir_files=file_pre+'URLs';
+    file_post='1';
+    for file_post in range(9,10):
+        file_post=str(file_post);
+        file_text = os.path.join(out_dir_meta,dir_files,file_pre+file_post+'.txt');
+        out_text = os.path.join(out_dir_meta,dir_files,file_pre+file_post+'_kept.txt');
+        print file_text;
+        htmls=util.readLinesFromFile(file_text)
+        # htmls=htmls[:1000];
+        num_files=len(htmls);
+        files_all=[os.path.join(out_dir_meta,file_pre+file_post,str(file_num)+'.jpg') for file_num in range(num_files)];
+        args=zip(htmls,files_all);
         t=time.time();
-        # # print 'cat '+file_for_wget+'| head -5 | parallel -j20'
-        os.system('cat '+file_for_wget+'| parallel -j20');
+        p=multiprocessing.Pool(multiprocessing.cpu_count());
+        bool_keep = p.map(isValidImage,args);
         print time.time()-t;
-        # print file_for_wget;
+        
+        # bool_keep = np.array(bool_keep);
+        # files_to_keep=np.array(files_all)[bool_keep];
+        # htmls_to_keep=np.array(htmls)[bool_keep];
 
-        # t=time.time();
-        # p.map(downloadImage,args);
-        # print (time.time()-t);
-        # print args[:10];
+        out_lines=[htmls[idx]+' '+files_all[idx] for idx,bool_val in enumerate(bool_keep) if bool_val];
+        print len(out_lines),len(htmls),len(out_lines)/float(len(htmls))
+        print out_text;    
+        util.writeFile(out_text,out_lines);
 
+    # im_paths=[[util.getRelPath(file_curr,dir_server)] for file_curr in files_to_keep];
+    # captions=[[''] for file_curr in files_to_keep];
+    # out_file_html=os.path.join(out_dir_meta,'viz.html');
+    # print len(im_paths);
+    # visualize.writeHTML(out_file_html,im_paths,captions);
+    # print out_file_html.replace(dir_server,click_str);
 
-        # total_len=len(ims);
-        # ims_name=[os.path.split(line_curr)[1] for line_curr in ims];
-        # ims_ends=[im_curr[im_curr.rindex('.'):] for im_curr in ims_name if '.' in im_curr];
-        # print total_len-len(ims_ends);
-        # ims_ends=list(set(ims_ends));
-        # print len(ims_ends);
-        # for im_end in ims_ends:
-        #     print im_end;
-        # break;
-        # print total_len,len(set(ims_name)),len(set(ims_name))==total_len
-        # assert len(set(ims_name))==total_len;
-    # print out_file_commands
-    # util.writeFile(out_file_commands,commands);
+def writeIndexFileEmotionet():
+    out_dir_meta = '../data/emotionet';
+    dir_anno= os.path.join(out_dir_meta,'emotioNet_challenge_files_updated');
+    file_pre  = 'dataFile_00';
+    out_file = os.path.join(dir_anno,'index_file.txt');
+    file_posts= range(1,94);
+    lines_to_write=[];
+    for file_post in file_posts:
 
-    #     
-    # p.map(saveBBoxIm,args);
-    # p.map(saveBBoxNpy,args_bbox_npy);
+        if file_post<10:
+            file_post='0'+str(file_post)+'.txt'
+        else:
+            file_post=str(file_post)+'.txt'
+        
+        file_curr=os.path.join(dir_anno,file_pre+file_post);
+        print file_curr;
+        lines=util.readLinesFromFile(file_curr);
+        # print lines[0];
+        # print lines[0].rsplit(' ',20);
+        # raw_input();
+        lines_to_write.extend([line_curr.split('\t')[0]+' '+file_curr for line_curr in lines]);
+        print len(lines_to_write);
 
+    util.writeFile(out_file,lines_to_write);
 
+def writeMissingImageFile():
+    out_dir_meta = '../data/emotionet';
+    anno_dir = os.path.join(out_dir_meta,'emotioNet_challenge_files_updated');
+    kept_dir =  os.path.join(out_dir_meta,'emotioNet_URLs');
+    index_file = os.path.join(anno_dir,'index_file.txt');
+    out_file = os.path.join(kept_dir,'emotioNet_leftover.txt');
 
+    index_data=util.readLinesFromFile(index_file);
+    index_data_pre=[line_curr.split(' ')[0] for line_curr in index_data];
+    # print index_data_pre[:10];
 
-def main():
-    url='http://image.pixmac.com/4/horror-dark-emotion-young-girl-face-abstract-pixmac-image-86178608.jpg';
-    url = 'https://sassafrasjunction.files.wordpress.com/2011/02/girl-scout.gif';
-    out_file='../scratch/test.jpg';
-    # downloadImage((url,out_file,1));
-    downloadEmotionetDataset();
-
+    in_files=[os.path.join(kept_dir,'emotioNet_'+str(num)+'_kept.txt') for num in range(1,10)]
+    hash_list=getHashList(in_files);
     
+    im_paths=[];
+    match_file=[];
+    missing_htmls=[];
+    not_found=0;
+    for idx_index_data_curr,index_data_curr in enumerate(index_data_pre):
+        if idx_index_data_curr%10000==0:
+            print idx_index_data_curr;
+
+        found=False;
+        for idx_hash_table_curr,hash_table_curr in enumerate(hash_list):
+            if hash_table_curr.has_key(index_data_curr):
+                im_paths.append(hash_table_curr[index_data_curr]);
+                match_file.append(idx_hash_table_curr);
+                found=True;
+                break;
+        
+        if not found:
+            missing_htmls.append(index_data_curr);
+            not_found+=1;
+            im_paths.append('-1');
+            match_file.append('-1');
+
+    assert len(im_paths)==len(index_data);
+    print not_found,len(index_data),not_found/float(len(index_data));
+    index_data=[line_curr+' '+im_paths[idx] for idx,line_curr in enumerate(index_data)];
+    print out_file;
+    print len(missing_htmls);   
+    util.writeFile(out_file,missing_htmls);
+
+def getHashList(in_files):
+    hash_list=[];
+    for in_file in in_files:
+        htmls=util.readLinesFromFile(in_file);
+        hash_curr={};
+        for line_curr in htmls:
+            line_split=line_curr.split(' ');
+            hash_curr[line_split[0]]=line_split[1];
+        hash_list.append(hash_curr);
+    return hash_list;
+
+def getAnnos(anno_file,hash_list,exp_flag=False):
+    anno_data=util.readLinesFromFile(anno_file);
+    annos_skipped=[];
+    annos_all=[];
+    for idx_line_curr,line_curr in enumerate(anno_data):
+        if exp_flag:
+            num_toks=16;
+        else:
+            num_toks=60;
+        line_curr=line_curr.rsplit(None,num_toks);
+        assert len(line_curr)==num_toks+1
+        html_curr=line_curr[0].strip("'");
+        im_curr=None;
+        for hash_curr in hash_list:
+            if hash_curr.has_key(html_curr):
+                im_curr=hash_curr[html_curr];
+                break;
+
+        if im_curr is None:
+            annos_skipped.append(html_curr);
+            continue;
+
+        annos_curr=[str(idx+1) for idx,val in enumerate(line_curr[1:]) if int(val)==1];
+        if len(annos_curr)==0:
+            annos_curr=[str(-1)];
+        annos_curr=[html_curr,im_curr]+annos_curr
+        annos_curr=' '.join(annos_curr);
+        annos_all.append(annos_curr);
+
+    return annos_all,annos_skipped
+
+def parseAnnotationsEmotionet():
+    out_dir_meta = '../data/emotionet';
+    anno_dir = os.path.join(out_dir_meta,'emotioNet_challenge_files_updated');
+    kept_dir =  os.path.join(out_dir_meta,'emotioNet_URLs');
+    anno_file_pre  = 'dataFile_00';
+
+    kept_files=[os.path.join(kept_dir,'emotioNet_'+str(num)+'_kept.txt') for num in range(1,10)]
+    hash_list = getHashList(kept_files);
+    
+    # annos_all_file=os.path.join(anno_dir,'annos_all.txt');
+    annos_all_file=os.path.join(anno_dir,'annos_val.txt');
+    annos_all=[];
+    annos_skipped_all=[];
+    # for anno_num in range(1,94):
+    # print anno_num
+    #     if anno_num<10:
+    #         anno_file_post='0'+str(anno_num)+'.txt';
+    #     else:
+    #         anno_file_post=str(anno_num)+'.txt';
+    anno_file=os.path.join(anno_dir,'val_data.txt')
+    # anno_file=os.path.join(anno_dir,anno_file_pre+anno_file_post);    
+    annos,annos_skipped=getAnnos(anno_file,hash_list);
+    print len(annos),len(annos_skipped),len(annos_skipped)/float(len(annos));
+    annos_all.extend(annos);
+    annos_skipped_all.extend(annos_skipped);
+    
+    print len(annos_skipped_all);
+    print len(annos_all);
+
+    util.writeFile(annos_all_file,annos_all);
+
+def parseAnnotationsExpressionEmotionet():
+    out_dir_meta = '../data/emotionet';
+    anno_dir = os.path.join(out_dir_meta,'anno_exp');
+    kept_dir =  os.path.join(out_dir_meta,'emotioNet_URLs');
+    anno_file=os.path.join(anno_dir,'val_exp.txt')
+    kept_files=[os.path.join(kept_dir,'emotioNet_'+str(num)+'_kept.txt') for num in range(1,10)]
+    hash_list = getHashList(kept_files);
+    
+    # annos_all_file=os.path.join(anno_dir,'annos_all.txt');
+    annos_all_file=os.path.join(anno_dir,'annos_val.txt');
+    annos_all=[];
+    annos_skipped_all=[];
+    # for anno_num in range(1,94):
+    # print anno_num
+    #     if anno_num<10:
+    #         anno_file_post='0'+str(anno_num)+'.txt';
+    #     else:
+    #         anno_file_post=str(anno_num)+'.txt';
+    
+    # anno_file=os.path.join(anno_dir,anno_file_pre+anno_file_post);    
+    annos,annos_skipped=getAnnos(anno_file,hash_list,True);
+    print len(annos),len(annos_skipped),len(annos_skipped)/float(len(annos));
+    annos_all.extend(annos);
+    annos_skipped_all.extend(annos_skipped);
+    
+    print len(annos_skipped_all);
+    print len(annos_all);
+
+    util.writeFile(annos_all_file,annos_all);
+
+def mappingCheck():
+    out_dir_meta='../data/emotionet';
+    au_dir=os.path.join(out_dir_meta,'emotioNet_challenge_files_updated');
+    exp_dir=os.path.join(out_dir_meta,'anno_exp');
+    val_exp=os.path.join(exp_dir,'annos_val.txt')
+    all_au=os.path.join(au_dir,'annos_all.txt');
+    val_au=os.path.join(au_dir,'annos_val.txt');
+    exp_data=util.readLinesFromFile(val_exp);
+    exp_data=[line_curr.split(' ') for line_curr in exp_data];
+    exp_data=np.array(exp_data);
+    au_data=util.readLinesFromFile(val_au)+util.readLinesFromFile(all_au);
+    au_data=[line_curr.split(None,2) for line_curr in au_data];
+    au_data=np.array(au_data);
+
+    exp=np.unique(exp_data[:,-1]);
+    exp_dict={};
+    for exp_curr in exp:
+        exp_dict[exp_curr]=[];
+
+    for exp_curr in exp:
+        htmls=exp_data[exp_data[:,-1]==exp_curr,1];
+        html_bin=np.in1d(au_data[:,1],htmls);
+        aus=np.unique(au_data[html_bin,-1]);
+        exp_dict[exp_curr].extend(list(aus));
+    
+    for exp in exp_dict.keys():
+        print 'EXP',exp,len(exp_dict[exp]);
+        for val in exp_dict[exp]:
+            print val;
+        print '___';
+
+def makeTrainTestAu():
+    out_dir_meta = '../data/emotionet';
+    au_dir = os.path.join(out_dir_meta,'emotioNet_challenge_files_updated');
+    all_au = os.path.join(au_dir,'annos_all.txt');
+    val_au = os.path.join(au_dir,'annos_val.txt');
+    out_dir_anno=os.path.join(out_dir_meta,'train_test_files');
+    util.mkdir(out_dir_anno);
+    train_out=os.path.join(out_dir_anno,'train_au_0.txt');
+    val_out=os.path.join(out_dir_anno,'val_au_0.txt');
+    all_au_data_list=util.readLinesFromFile(all_au);
+    
+    all_au_data=np.array([line_curr.split(None,2) for line_curr in all_au_data_list]);
+    
+    val_au_data_list=util.readLinesFromFile(val_au);
+    val_au_data=np.array([line_curr.split(None,2) for line_curr in val_au_data_list]);
+    
+    train_au_bool=np.in1d(all_au_data[:,1], val_au_data[:,1],invert=True);
+    train_au_data=np.array(all_au_data_list)[train_au_bool];
+    util.writeFile(train_out,train_au_data)
+    util.writeFile(val_out,val_au_data_list)
+
+def makeTrainTestExp():
+    out_dir_meta = '../data/emotionet';
+    out_dir_exp=os.path.join(out_dir_meta,'anno_exp');
+    out_dir_anno=os.path.join(out_dir_meta,'train_test_files');
+    ref_file=os.path.join(out_dir_anno,'exp_ref.txt');
+    train_au=os.path.join(out_dir_anno,'train_au_0.txt');
+    val_exp=os.path.join(out_dir_exp,'annos_val.txt');
+
+    train_out=os.path.join(out_dir_anno,'train_0.txt');
+    val_out=os.path.join(out_dir_anno,'val_0.txt');
     
 
-
-
-
-
-
-
-
+    au_data_list=util.readLinesFromFile(train_au);
+    au_data=np.array([line_curr.split(None,2) for line_curr in au_data_list]);
     
+    val_data_list=util.readLinesFromFile(val_exp);
+    val_data=np.array([line_curr.split(None,2) for line_curr in val_data_list]);
+    bool_keep=np.in1d(au_data[:,1],val_data[:,1],invert=True);
+    print bool_keep.shape,au_data.shape,val_data.shape,sum(bool_keep);
+    au_data_list=np.array(au_data_list)[bool_keep];
+    au_data=au_data[bool_keep,:];
+    print bool_keep.shape,au_data.shape,val_data.shape,sum(bool_keep);
 
+    ref_data=util.readLinesFromFile(ref_file);
+    ref_data=[line_curr.split(None,2) for line_curr in ref_data];
+
+    train_all=np.zeros((0,au_data.shape[1]));
+    for [exp_str,exp_num,exp_au] in ref_data:
+        print exp_str,exp_num,exp_au
+        bool_keep=au_data[:,2]==exp_au;
+        print sum(bool_keep);
+        train_exp_curr=au_data[bool_keep,:];
+        train_all=np.concatenate((train_all,train_exp_curr));
+
+    train_all=[' '.join(list(line_curr)) for line_curr in train_all];
+    print len(train_all),train_all[100],train_out;
+    util.writeFile(train_out,train_all);
+    print len(val_data_list),val_data_list[100],val_out;
+    util.writeFile(val_out,val_data_list); 
+
+        
+
+    # print ref_data;
+
+
+
+
+
+def main(args):
+    # mappingCheck();
+    makeTrainTestExp();
+    # makeTrainTestAu();
+
+    # util.writeFile(out_file,lines_all);
+    # print out_file
     
-    
-    
-
-
-
-
-
+    # parseAnnotationsExpressionEmotionet();
+    # im='../data/emotionet/emotioNet_9/100021.jpg';
+    # print os.stat(im).st_size
+    # writeIndexFileEmotionet()
+    # writeMissingImageFile();
+    # getListOfValidImagesEmotionet
+    # getListOfValidImagesEmotionet()
+    # viewDatasetEmotionet()    
+    # downloadEmotionetDataset();
+    # url='http://image.pixmac.com/4/horror-dark-emotion-young-girl-face-abstract-pixmac-image-86178608.jpg';
+    # url = 'https://sassafrasjunction.files.wordpress.com/2011/02/girl-scout.gif';
+    # out_file='../scratch/test.jpg';
+    # # downloadImage((url,out_file,1));
+    # # print args[1];
+    # time.sleep(5*random.random());
+    # downloadEmotionetDataset()
+    # int(args[1]));
+    # t=time.time();
+    # time.sleep(120);
+    # print time.time()-t;
 
 
 if __name__ == '__main__':
-    main();
+    main(sys.argv);
