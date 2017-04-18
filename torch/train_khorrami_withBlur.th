@@ -52,7 +52,10 @@ function doTheUpdate(td,net,criterion,parameters,gradParameters,optimMethod,opti
     if activationThresh>0 then
         assert (net_gb);
         -- print (activationThresh);
+        -- local out_file_pre='../scratch/look_at_im/im';
+        -- paths.mkdir('../scratch/look_at_im');
         td:buildBlurryBatch(params.layer_to_viz,activationThresh,params.scheme)
+        -- ,out_file_pre)
         batch_inputs=td.training_set.data;
         batch_targets=td.training_set.label;
     else
@@ -101,18 +104,18 @@ function test(params)
     local logger=torch.DiskFile(out_file_log,'w');
 
     logger:writeString(dump.tostring(params)..'\n');
-    -- print (params);
+    print (params);
 
     cutorch.setDevice(params.gpu);
 
 
     logger:writeString(dump.tostring('loading network')..'\n');
-    -- print ('loading network');
+    print ('loading network');
 
     local net=torch.load(params.modelTest);
 
     logger:writeString(dump.tostring('done loading network')..'\n');
-    -- print ('done loading network');
+    print ('done loading network');
     -- logger:writeString(dump.tostring(net)..'\n');
     -- print (net);
 
@@ -127,7 +130,7 @@ function test(params)
     net_gb:evaluate();
 
     logger:writeString(dump.tostring('done')..'\n');
-    -- print ('done');
+    print ('done');
 
     local data_params={file_path=params.val_data_path,
                     batch_size=params.batchSizeTest,
@@ -135,7 +138,7 @@ function test(params)
                     std_file=params.std_im_path,
                     augmentation=false,
                     limit=params.limit,
-                    ratio_blur=nil,
+                    ratio_blur=0,
                     conv_size=params.conv_size,
                     net=net:clone(),
                     net_gb=net_gb:clone(),
@@ -594,5 +597,5 @@ main(params);
 
 cmd:option('-outDirTest',paths.concat(params.outDir,'test_images'));
 params = cmd:parse(arg)
-test(params);
+-- test(params);
 -- testGlobal();

@@ -21,8 +21,8 @@ do
         self.pixel_augment={0.5,1.5};
         self.scale={0.7,1.4};
         self.a_range = {0.25,4}
-        self.b_range = {0.7,1.4};
-        self.c_range = {-0.1,0.1};
+        self.b_range = {0.1,1};
+        -- self.c_range = {-0.1,0.1};
 
         self.ratio_blur=args.ratio_blur;
         self.activation_upper=args.activation_upper;
@@ -278,6 +278,7 @@ do
         if self.ratio_blur then
             im_num_end_blur=inputs_org:size(1)*self.ratio_blur;
         end
+        -- print ('im_num_end_blur',im_num_end_blur);
         -- print ('time_activation_pre_processing',os.clock()-time_blurry);        
 
         -- local time_blurry= os.clock();
@@ -475,6 +476,28 @@ do
         local y_translate=math.random(-delta,delta)
         img_face = image.translate(img_face, x_translate, y_translate);
         
+        -- print (torch.min(img_face),torch.max(img_face));
+        local min_im =torch.min(img_face);
+        img_face=img_face-min_im;
+        local max_im = torch.max(img_face);
+        img_face=img_face/max_im;
+        -- print (torch.min(img_face),torch.max(img_face));
+
+        -- print (torch.min(img_face),torch.max(img_face))
+        local a=(math.random()*(self.a_range[2]-self.a_range[1]))+self.a_range[1];
+        local b=(math.random()*(self.b_range[2]-self.b_range[1]))+self.b_range[1];
+        img_face = (torch.pow(img_face,a)*b)
+        -- print (torch.min(img_face),torch.max(img_face));
+        img_face[img_face:le(0)]=0;
+        img_face[img_face:ge(1)]=1;
+
+        img_face=img_face*max_im;
+        img_face=img_face+min_im;
+        -- print (torch.min(img_face),torch.max(img_face));
+        -- assert (torch.min(img_face)==min_im);
+        -- assert (torch.max(img_face)==(max_im-min_im))
+        
+
         img_face[img_face:ne(img_face)]=0;
         
         return img_face;

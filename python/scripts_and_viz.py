@@ -90,7 +90,7 @@ def writeCKScripts():
 def writeTFDSchemeScripts():
     
     # experiment_name='khorrami_basic_tfd_schemes_fullBlur';
-    experiment_name='khorrami_basic_tfd_schemes_noBlur_meanFirst';
+    experiment_name='noBlur_meanFirst_pixel_augment';
     out_dir_meta='../experiments/'+experiment_name;
     util.mkdir(out_dir_meta);
     out_script='../scripts/train_'+experiment_name;
@@ -141,7 +141,8 @@ def writeTFDSchemeScripts():
             command = command+['-batchSize',batchSize];
 
             command = command+['-ratioBlur',ratioBlur];
-            command = command+['-incrementDifficultyAfter',10*epoch_size];
+            command = command+['-incrementDifficultyAfter',0];
+            # 1*epoch_size];
             command = command+['-scheme',scheme];
             
             command = command+['learningRate',learningRate];
