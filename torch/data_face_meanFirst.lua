@@ -118,51 +118,34 @@ do
         return im,mean,std
     end 
 
-    function data:getGCamEtc(net,net_gb,layer_to_viz,batch_inputs,batch_targets)
+    function data:getGCamEtc(net,net_gb,layer_to_viz,batch_inputs,batch_targets,also_pred)
 
-        -- local time_blurry= os.clock();
         net:zeroGradParameters();
         net_gb:zeroGradParameters();
-        -- print ('time_zero',os.clock()-time_blurry);
-
-
-        
-
-        -- local time_blurry= os.clock();
         local outputs=net:forward(batch_inputs);
-        -- print ('time_forward net',os.clock()-time_blurry);
-        
-        -- local time_blurry= os.clock();
         local outputs_gb= net_gb:forward(batch_inputs);
-        -- print ('time_forward net gb',os.clock()-time_blurry);
-        
-
-        -- print (net)
-        -- print (net_gb);
-
-        -- local scores, pred_labels = torch.max(outputs, 2);
-        -- pred_labels = pred_labels:type(batch_targets:type());
-        -- pred_labels = pred_labels:view(batch_targets:size());
-
-        -- local doutput_pred = utils.create_grad_input_batch(net.modules[#net.modules], pred_labels)
-        -- local gcam_pred = utils.grad_cam_batch(net, layer_to_viz, doutput_pred);
-        -- net:zeroGradParameters();
-        -- local time_blurry= os.clock();
         local doutput_gt =  utils.create_grad_input_batch(net.modules[#net.modules], batch_targets)
-        -- print ('time_grad_batch',os.clock()-time_blurry);
-
-        -- local time_blurry= os.clock();
         local gcam_gt = utils.grad_cam_batch(net, layer_to_viz, doutput_gt);
-        -- print ('grad_cam_batch',os.clock()-time_blurry);
-
-        -- local gb_viz_pred = net_gb:backward(batch_inputs, doutput_pred)
-        -- net_gb:zeroGradParameters();
-
-        -- local time_blurry= os.clock();
         local gb_viz_gt = net_gb:backward(batch_inputs, doutput_gt)
-        -- print ('gb_back',os.clock()-time_blurry);
-        -- return {gcam_pred,gcam_gt},{gb_viz_pred,gb_viz_gt},pred_labels;
-        return {gcam_gt,gcam_gt},{gb_viz_gt,gb_viz_gt},pred_labels;
+
+        local gcam_pred,gb_viz_pred,pred_labels
+        if also_pred then
+            local scores;
+            net:zeroGradParameters();
+            net_gb:zeroGradParameters();
+            scores, pred_labels = torch.max(outputs, 2);
+            pred_labels = pred_labels:type(batch_targets:type());
+            pred_labels = pred_labels:view(batch_targets:size());
+            local doutput_pred = utils.create_grad_input_batch(net.modules[#net.modules], pred_labels)
+            gcam_pred = utils.grad_cam_batch(net, layer_to_viz, doutput_pred);
+            gb_viz_pred = net_gb:backward(batch_inputs, doutput_pred)
+        else
+            gcam_pred=gcam_gt
+            gb_viz_pred=gb_viz_gt
+        end
+        
+        return {gcam_pred,gcam_gt},{gb_viz_pred,gb_viz_gt},pred_labels;
+        -- return {gcam_gt,gcam_gt},{gb_viz_gt,gb_viz_gt},pred_labels;
         
     end
 
@@ -199,9 +182,9 @@ do
     end
 
 
-    function data:buildBlurryBatch(layer_to_viz,activation_thresh,strategy,out_file_pre)
+    function data:buildBlurryBatch(layer_to_viz,activation_thresh,strategy,out_file_pre,also_pred)
         -- MODIFIED
-        
+        -- print ('ALSO_PRED',also_pred);
         -- set nets mode
         local train_state=self.net.train;
         
@@ -219,53 +202,39 @@ do
         end
 
         -- build a batch of images mean preprocessed before augmentation
-        -- local time_blurry= os.clock();
         self:getTrainingData();
-        -- print ('time_getTraining',os.clock()-time_blurry);
-
+        
         -- set cuda
-        -- local time_blurry= os.clock();
         self.training_set.data = self.training_set.data:cuda();
         self.training_set.label = self.training_set.label:cuda();
         local batch_inputs = self.training_set.data;
         local batch_targets = self.training_set.label;
-        -- print ('time_movecuda',os.clock()-time_blurry);
-
-        -- get helper nets
-        -- local time_blurry= os.clock();
         
+        -- get helper nets
         local gauss_layer = self.gauss_layer;
         local gauss_layer_small = self.gauss_layer_small;
         local up_layer = self.up_layer;
         local min_layer = self.min_layer;
         local max_layer = self.max_layer;
-        -- print ('time_helpernets',os.clock()-time_blurry);
-
+        
         -- get gcam stuff
-        -- local time_blurry= os.clock();
-        local gcam_both,gb_viz_both,pred_labels = self:getGCamEtc(self.net,self.net_gb,layer_to_viz,batch_inputs,batch_targets)
-        -- print ('time_gcametc',os.clock()-time_blurry);
-
+        local gcam_both,gb_viz_both,pred_labels = self:getGCamEtc(self.net,self.net_gb,layer_to_viz,batch_inputs,batch_targets,also_pred)
+        
         -- set input range 0-1
-        -- local time_blurry= os.clock();
         local inputs_org=batch_inputs;
         local min_vals=min_layer:forward(inputs_org):clone();
         inputs_org=inputs_org-min_vals;
         local max_vals=max_layer:forward(inputs_org):clone();
         inputs_org:cdiv(max_vals);
-        -- print ('time_unMean',os.clock()-time_blurry);
-
+        
         -- create input with blur
-        -- local time_blurry= os.clock();
-        local inputs_blur=gauss_layer:forward(inputs_org);
+        local inputs_blur=gauss_layer:forward(inputs_org):clone();
         inputs_blur:cdiv(max_layer:forward(inputs_blur:csub(min_layer:forward(inputs_blur))));
-        -- print ('time_blur',os.clock()-time_blurry);
-
+        
         -- get activations
-        -- local time_blurry= os.clock();
         local gcam_curr = gcam_both[2];
-        local gb_viz_curr = gb_viz_both[2]
-        gcam_curr = up_layer:forward(gcam_curr);
+        local gb_viz_curr = gb_viz_both[2];
+        gcam_curr = up_layer:forward(gcam_curr):clone();
         local gb_gcam_org_all = torch.cmul(gb_viz_curr,gcam_curr);
         local gb_gcam_all = torch.abs(gb_gcam_org_all);
         gb_gcam_all:cdiv(max_layer:forward(gb_gcam_all:csub(min_layer:forward(gb_gcam_all))));
@@ -278,10 +247,7 @@ do
         if self.ratio_blur then
             im_num_end_blur=inputs_org:size(1)*self.ratio_blur;
         end
-        -- print ('im_num_end_blur',im_num_end_blur);
-        -- print ('time_activation_pre_processing',os.clock()-time_blurry);        
-
-        -- local time_blurry= os.clock();
+        
         for im_num =1, inputs_org:size(1) do
             if im_num<=im_num_end_blur then
                 local activation_thresh_curr;
@@ -302,12 +268,8 @@ do
                 local gb_gcam = gb_gcam_all[im_num][1];
                 local gb_gcam_vals = torch.sort(gb_gcam:view(-1),1,true);
                 local idx_gb_gcam_vals=math.floor(gb_gcam_vals:size(1)*activation_thresh_curr)
-                -- if idx_gb_gcam_vals==0 then
-                --     print ('GOT A ZERo');
-                --     print (activation_thresh_curr,gb_gcam_vals:size(1),idx_gb_gcam_vals);
-                -- end
-                idx_gb_gcam_vals=math.max(1,idx_gb_gcam_vals);
                 
+                idx_gb_gcam_vals=math.max(1,idx_gb_gcam_vals);
                 
                 local val = gb_gcam_vals[idx_gb_gcam_vals];
                 vals_all[im_num][1]:fill(val);
@@ -315,15 +277,14 @@ do
                 vals_all[im_num][1]:fill(max_val+1);
             end
         end
-        -- print ('time_getvals',os.clock()-time_blurry);
-
+        
         -- create masks and blur
-        -- local time_blurry= os.clock();
         gb_gcam_th_all[gb_gcam_all:ge(vals_all)]=1;
         gb_gcam_th_all[gb_gcam_all:lt(vals_all)]=0;
-        gb_gcam_th_all=gauss_layer_small:forward(gb_gcam_th_all);
+        gb_gcam_th_all=gauss_layer_small:forward(gb_gcam_th_all):clone();
         gb_gcam_th_all:cdiv(max_layer:forward(gb_gcam_th_all:csub(min_layer:forward(gb_gcam_th_all))));
         gb_gcam_th_all[gb_gcam_th_all:ne(gb_gcam_th_all)]=0;
+        
         -- blur specific parts in input image
         local im_blur_all=torch.cmul(gb_gcam_th_all,inputs_blur)+torch.cmul((1-gb_gcam_th_all),inputs_org);
         
@@ -333,14 +294,34 @@ do
         
         self.training_set.data = im_blur_all;
         self.training_set.label = batch_targets;
-        -- print ('time_makeBlurry',os.clock()-time_blurry);
-
+        
         if out_file_pre then
-            print ('gb_gcam_org_all',torch.min(gb_gcam_org_all),torch.max(gb_gcam_org_all));
-            print ('inputs_org',torch.min(inputs_org),torch.max(inputs_org));
-            print ('inputs_blur',torch.min(inputs_blur),torch.max(inputs_blur));
-            print ('gb_gcam_th_all',torch.min(gb_gcam_th_all),torch.max(gb_gcam_th_all));
-            print ('im_blur_all',torch.min(im_blur_all),torch.max(im_blur_all));
+            if self.mean_batch:type()~='torch.CudaTensor' then
+                self.mean_batch = self.mean_batch:cuda();
+                self.std_batch = self.std_batch:cuda();
+            end
+            im_blur_all=self:unMean(self.mean_batch,self.std_batch);
+            inputs_org=inputs_org:cmul(max_vals)+min_vals
+            inputs_blur=inputs_blur:cmul(max_vals)+min_vals
+            inputs_org = torch.cmul(inputs_org,self.std_batch)+self.mean_batch
+            inputs_blur = torch.cmul(inputs_blur,self.std_batch)+self.mean_batch
+
+            local gcam_curr_pred,gb_gcam_all_pred,gb_gcam_org_all_pred;
+            local gcam_curr_clone = gcam_both[2]:clone();
+            if also_pred then
+                gcam_curr_pred = gcam_both[1];
+                gcam_curr_pred_clone = gcam_both[1]:clone();
+                local gb_viz_curr_pred = gb_viz_both[1];
+                gcam_curr_pred = up_layer:forward(gcam_curr_pred):clone();
+                gb_gcam_org_all_pred = torch.cmul(gb_viz_curr_pred,gcam_curr_pred);
+                gb_gcam_all_pred = torch.abs(gb_gcam_org_all_pred);
+                gb_gcam_all_pred:cdiv(max_layer:forward(gb_gcam_all_pred:csub(min_layer:forward(gb_gcam_all_pred))));
+            end
+            -- print ('gb_gcam_org_all',torch.min(gb_gcam_org_all),torch.max(gb_gcam_org_all));
+            -- print ('inputs_org',torch.min(inputs_org),torch.max(inputs_org));
+            -- print ('inputs_blur',torch.min(inputs_blur),torch.max(inputs_blur));
+            -- print ('gb_gcam_th_all',torch.min(gb_gcam_th_all),torch.max(gb_gcam_th_all));
+            -- print ('im_blur_all',torch.min(im_blur_all),torch.max(im_blur_all));
             
             for im_num=1,inputs_org:size(1) do
                 local out_file_org=out_file_pre..im_num..'_org.jpg';
@@ -350,7 +331,6 @@ do
                 local out_file_gb_gcam_th=out_file_pre..im_num..'_gb_gcam_th.jpg';
                 local out_file_g = out_file_pre..im_num..'_gaussian.jpg';
                 local out_file_blur = out_file_pre..im_num..'_blur.jpg';
-                
                 local gcam=gcam_curr[im_num]
                 local gb_gcam = gb_gcam_all[im_num];
                 local gb_gcam_org = gb_gcam_org_all[im_num]
@@ -368,6 +348,22 @@ do
                 image.save(out_file_hm, image.toDisplayTensor(hm))
                 image.save(out_file_org, image.toDisplayTensor(im_org))
                 image.save(out_file_g,image.toDisplayTensor(im_g));
+                
+                if also_pred then
+                    local out_file_gb_gcam_pred=out_file_pre..im_num..'_gb_gcam_pred.jpg';
+                    local out_file_hm_pred=out_file_pre..im_num..'_hm_pred.jpg';
+                    local out_file_gb_gcam_org_pred=out_file_pre..im_num..'_gb_gcam_org_pred.jpg';
+                    
+                    local gcam_pred=gcam_curr_pred[im_num]
+                    local gb_gcam_pred = gb_gcam_all_pred[im_num];
+                    local gb_gcam_org_pred = gb_gcam_org_all_pred[im_num]
+                    local hm_pred = utils.to_heatmap(gcam_pred:float())
+                    
+                    image.save(out_file_gb_gcam_pred, image.toDisplayTensor(gb_gcam_pred))
+                    image.save(out_file_gb_gcam_org_pred, image.toDisplayTensor(gb_gcam_org_pred))
+                    image.save(out_file_hm_pred, image.toDisplayTensor(hm_pred))
+                end
+
             end
         end
 

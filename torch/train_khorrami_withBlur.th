@@ -99,7 +99,8 @@ function test(params)
     
     local out_file_loss_val=paths.concat(out_dir_images,'loss_final_val.npy');
     local out_file_loss_val_ind=paths.concat(out_dir_images,'loss_final_val_ind.npy');
-    
+    local out_file_pred=paths.concat(out_dir_images,'1_pred_labels.npy');
+    local out_file_gt=paths.concat(out_dir_images,'1_gt_labels.npy');
     local out_file_log=paths.concat(out_dir_images,'log_test.txt');
     local logger=torch.DiskFile(out_file_log,'w');
 
@@ -160,13 +161,15 @@ function test(params)
                                        -- reset matrix
     local batch_targets_all=nil;
     local outputs_all=nil;
+    local preds_all=nil;
     local val_losses={};
     local accuracy={};
     local val_losses_iter={};
     for i=1,params.iterationsTest do
         -- vd:getTrainingData();
         local out_file_pre=paths.concat(out_dir_images,i..'_');
-        vd:buildBlurryBatch(params.layer_to_viz,0.05,'ncl',out_file_pre)
+        vd:buildBlurryBatch(params.layer_to_viz,0.05,'ncl',out_file_pre,true)
+        -- vd:getTrainingData();
         vd.training_set.data=vd.training_set.data:cuda();
         vd.training_set.label=vd.training_set.label:cuda();
         local batch_inputs=vd.training_set.data;
@@ -207,6 +210,12 @@ function test(params)
         else
             batch_targets_all = torch.cat(batch_targets_all,batch_targets,1);
         end
+
+        if not preds_all then
+            preds_all = indices:clone();
+        else
+            preds_all = torch.cat(preds_all,indices,1);
+        end
         
         -- conf:batchAdd( outputs,batch_targets);
         -- local s=tostring(conf)
@@ -220,14 +229,20 @@ function test(params)
     assert (outputs_all:size(1)>=#vd.lines_face)
     outputs_all=outputs_all[{{1,#vd.lines_face},{}}]
     batch_targets_all=batch_targets_all[{{1,#vd.lines_face}}];
+    preds_all=preds_all[{{1,#vd.lines_face}}];
+
     -- print (outputs_all:size())
     -- print (batch_targets_all:size());
-    local conf = optim.ConfusionMatrix( {'neutral', 'anger','disgust', 'fear', 'happy', 'sadness', 'surprise'} )
+
+    local conf = optim.ConfusionMatrix( {'neutral', 'anger','contempt','disgust', 'fear', 'happy', 'sadness', 'surprise'} )
     conf:zero()    
     conf:batchAdd( outputs_all, batch_targets_all )         -- accumulate errors
     print (conf);
     local s=tostring(conf)
     logger:writeString(s..'\n');       
+    npy4th.savenpy(out_file_pred, preds_all)
+    npy4th.savenpy(out_file_gt, batch_targets_all)
+
 end
 
 
@@ -250,7 +265,7 @@ function testGlobal()
         local std_im_path=std_path_pre[1]..fold_num..std_path_pre[2];
 
         local data_params={file_path=val_data_path,
-                    batch_size=batch_sizes[fold_num+1],
+                    batch_size=128,
                     mean_file=mean_im_path,
                     std_file=std_im_path,
                     augmentation=false,
@@ -590,12 +605,12 @@ cmd:option('-modelTest',paths.concat(temp,'final/model_all_final.dat'));
 
 
 params = cmd:parse(arg)
-main(params);    
+-- main(params);    
 
 -- cmd:option('-iterations',1,'num of iterations to run');
 -- cmd:option('-batchSize',132,'batch size');
 
 cmd:option('-outDirTest',paths.concat(params.outDir,'test_images'));
 params = cmd:parse(arg)
--- test(params);
+test(params);
 -- testGlobal();
