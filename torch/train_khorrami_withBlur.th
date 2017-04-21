@@ -43,15 +43,15 @@ function getOptimStateTotal(params,parameters,logger)
     return optimStateTotal;
 end
 
-function doTheUpdate(td,net,criterion,parameters,gradParameters,optimMethod,optimStateTotal,activationThresh,net_gb,params)
+function doTheUpdate(td,net,criterion,parameters,gradParameters,optimMethod,optimStateTotal,activationThresh,params)
     
     local batch_inputs;
     local batch_targets;
     
 
-    if activationThresh>0 then
-        assert (net_gb);
-        -- print (activationThresh);
+    if params.incrementDifficultyAfter>=0 then
+        -- assert (net_gb);
+        -- print ('params.incrementDifficultyAfter,activationThresh',params.scheme,params.incrementDifficultyAfter,activationThresh);
         -- local out_file_pre='../scratch/look_at_im/im';
         -- paths.mkdir('../scratch/look_at_im');
         td:buildBlurryBatch(params.layer_to_viz,activationThresh,params.scheme)
@@ -137,9 +137,10 @@ function test(params)
                     batch_size=params.batchSizeTest,
                     mean_file=params.mean_im_path,
                     std_file=params.std_im_path,
+                    activation_upper=0,
                     augmentation=false,
                     limit=params.limit,
-                    ratio_blur=0,
+                    ratio_blur=0.0,
                     conv_size=params.conv_size,
                     net=net:clone(),
                     net_gb=net_gb:clone(),
@@ -168,7 +169,8 @@ function test(params)
     for i=1,params.iterationsTest do
         -- vd:getTrainingData();
         local out_file_pre=paths.concat(out_dir_images,i..'_');
-        vd:buildBlurryBatch(params.layer_to_viz,0.05,'ncl',out_file_pre,true)
+        vd:buildBlurryBatch(params.layer_to_viz,0.0,'ncl',out_file_pre,true);
+            -- ,true)
         -- vd:getTrainingData();
         vd.training_set.data=vd.training_set.data:cuda();
         vd.training_set.label=vd.training_set.label:cuda();
@@ -357,6 +359,29 @@ function main(params)
     logger:writeString(dump.tostring(optimState)..'\n');
     print (optimState)
 
+    local activationThresh=params.startingActivation;
+    local activationThresh_increment=0;
+    local activation_upper=0;
+    if params.incrementDifficultyAfter>=0 then
+        if params.fixThresh>0 then
+            activationThresh_increment=params.fixThresh;
+            -- print (activationThresh_increment);
+        else
+        
+            local num_inc;
+            if params.iterations%params.incrementDifficultyAfter==0 then
+                num_inc=(params.iterations/params.incrementDifficultyAfter)-1;
+            else
+                num_inc=math.floor(params.iterations/params.incrementDifficultyAfter);
+            end
+
+            activationThresh_increment = (params.activationThreshMax-activationThresh)/num_inc;
+        end 
+        activation_upper=torch.range(0,params.activationThreshMax,activationThresh_increment);
+        print ('num_inc,activationThresh_increment',num_inc,activationThresh_increment);    
+    end
+
+    
     local data_params={file_path=data_path,
 					batch_size=params.batchSize,
 					mean_file=params.mean_im_path,
@@ -364,13 +389,12 @@ function main(params)
 					augmentation=params.augmentation,
 					limit=params.limit,
                     ratio_blur=params.ratioBlur,
-                    activation_upper=params.activationThreshMax,
+                    activation_upper=activation_upper,
                     conv_size=params.conv_size,
                     net=net:clone(),
                     net_gb=net_gb:clone(),
                     optimize=params.optimize
                     };
-
 
 	local td=data_face(data_params);
 
@@ -404,20 +428,7 @@ function main(params)
     -- end
     
     -- local criterion = nn.ClassNLLCriterion(criterion_weights):cuda();
-    local activationThresh=0;
-    local activationThresh_increment=0;
 
-    if params.incrementDifficultyAfter then
-        local num_inc;
-        if params.iterations%params.incrementDifficultyAfter==0 then
-            num_inc=(params.iterations/params.incrementDifficultyAfter)-1;
-        else
-            num_inc=math.floor(params.iterations/params.incrementDifficultyAfter);
-        end
-        activationThresh_increment = params.activationThreshMax/num_inc;
-        print ('num_inc,activationThresh_increment',num_inc,activationThresh_increment);
-        
-    end
 
     local losses = {};
     local losses_iter = {};
@@ -432,7 +443,7 @@ function main(params)
         -- local minibatch_loss = doTheUpdate(td,net,criterion,parameters,gradParameters,optimMethod,optimStateTotal)
         -- print (activationThresh);    
         local time_update=os.clock();    
-        local minibatch_loss = doTheUpdate(td,net,criterion,parameters,gradParameters,optimMethod,optimStateTotal,activationThresh,net_gb,params)
+        local minibatch_loss = doTheUpdate(td,net,criterion,parameters,gradParameters,optimMethod,optimStateTotal,activationThresh,params)
         time_update=os.clock()-time_update;
         if minibatch_loss>3 then
             minibatch_loss=3;
@@ -507,7 +518,7 @@ function main(params)
             visualize:plotLossFigure(losses,losses_iter,val_losses,val_losses_iter,out_file_loss_plot);
         end
 
-        if params.incrementDifficultyAfter and i%params.incrementDifficultyAfter==0 then
+        if params.incrementDifficultyAfter>0 and i%params.incrementDifficultyAfter==0 then
             -- local net_gb= net:clone();
             -- net_gb:replace(utils.guidedbackprop);
             -- net_gb = net_gb:cuda();
@@ -573,7 +584,9 @@ cmd:option('-limit',-1,'num of training data to read');
 cmd:option('-iterations',100*epoch_size,'num of iterations to run');
 
 cmd:option('-ratioBlur',1);
-cmd:option('-incrementDifficultyAfter',1*epoch_size);
+cmd:option('-startingActivation',0);
+cmd:option('-fixThresh',-1);
+cmd:option('-incrementDifficultyAfter',0);
 cmd:option('-activationThreshMax',0.5);
 cmd:option('-scheme',scheme);
 cmd:option('-conv_size',5);
@@ -605,7 +618,7 @@ cmd:option('-modelTest',paths.concat(temp,'final/model_all_final.dat'));
 
 
 params = cmd:parse(arg)
--- main(params);    
+main(params);    
 
 -- cmd:option('-iterations',1,'num of iterations to run');
 -- cmd:option('-batchSize',132,'batch size');

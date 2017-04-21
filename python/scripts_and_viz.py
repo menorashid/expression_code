@@ -14,10 +14,15 @@ def writeBlurScript(\
     out_dir_meta,
     dir_files,
     fold_num,
+    model_file=None,
     batchSize=128,
     learningRate=0.01,
+    scheme='ncl',
     ratioBlur=0,
-    incrementDifficultyAfter=0,
+    incrementDifficultyAfter=-1,
+    startingActivation=0,
+    fixThresh=-1,
+    activationThreshMax=0.5,
     iterations=1000,
     saveAfter=100,
     testAfter=10,
@@ -39,25 +44,33 @@ def writeBlurScript(\
     outDir=os.path.join(out_dir_meta,str(fold_num));
 
     command=['th',path_to_th];
-    if resume_dir_meta is not None:
+    if model_file is not None:
+        command = command+['-model',model_file];            
+    elif resume_dir_meta is not None:
         model_path_resume=os.path.join(resume_dir_meta,str(fold_num),'final','model_all_final.dat');
         command = command+['-model',model_path_resume];            
-
+    
     command = command+['-mean_im_path',mean_im_path];
     command = command+['-std_im_path',std_im_path];
     command = command+['-batchSize',batchSize];
     
     command = command+['learningRate',learningRate];
 
+    command = command+['-scheme',scheme];
     command = command+['-ratioBlur',ratioBlur];
-    command = command+['-incrementDifficultyAfter',0];
-        
-
-    command = command+['-iterations',1000*epoch_size];
-    command = command+['-saveAfter',100*epoch_size];
-    command = command+['-testAfter',10*epoch_size];
-    command = command+['-dispAfter',1*epoch_size];
-    command = command+['-dispPlotAfter',10*epoch_size];
+    if incrementDifficultyAfter>=0:
+        command = command+['-incrementDifficultyAfter',incrementDifficultyAfter*epoch_size];
+    else:
+        command = command+['-incrementDifficultyAfter',-1];
+    command = command+['-startingActivation',startingActivation];
+    command = command+['-fixThresh',fixThresh];
+    command = command+['-activationThreshMax',activationThreshMax];
+    
+    command = command+['-iterations',iterations*epoch_size];
+    command = command+['-saveAfter',saveAfter*epoch_size];
+    command = command+['-testAfter',testAfter*epoch_size];
+    command = command+['-dispAfter',dispAfter*epoch_size];
+    command = command+['-dispPlotAfter',dispPlotAfter*epoch_size];
 
     command = command+['-val_data_path',val_data_path];
     command = command+['-data_path',data_path];
@@ -175,7 +188,7 @@ def writeTFDSchemeScripts():
     path_to_th='train_khorrami_withBlur.th';
 
     dir_files='../data/tfd/train_test_files';
-    resume_dir_meta=None
+    resume_dir_meta='../experiments/noBlur_meanFirst_pixel_augment/noBlur_meanFirst_7out'
     # '../experiments/khorrami_basic_tfd_resume'
     num_folds=5;
 
@@ -186,7 +199,7 @@ def writeTFDSchemeScripts():
     schemes=['mix','mixcl'];
     # incrementDifficultyAfter=10*epoch_size;
     incrementDifficultyAfter=0;
-    schemes=['noBlur_meanFirst_7out'];
+    schemes=['noBlur_meanFirst_7out_resume'];
     # model='../models/base_khorrami_model_7.dat';
     num_scripts=1;
     # print '{',
@@ -227,7 +240,7 @@ def writeTFDSchemeScripts():
             
             command = command+['learningRate',learningRate];
 
-            command = command+['-iterations',1200*epoch_size];
+            command = command+['-iterations',300*epoch_size];
             command = command+['-saveAfter',100*epoch_size];
             command = command+['-testAfter',10*epoch_size];
             command = command+['-dispAfter',1*epoch_size];
@@ -420,8 +433,9 @@ def script_vizCompareActivations():
     print out_file_html.replace(dir_server,click_str);
 
 def writeCKScripts_viz_inc():
-    experiment_name='ck_inc_viz';
-    out_dir_meta='../experiments/'+experiment_name;
+    experiment_name='test_mean_blur';
+    # out_dir_meta='../experiments/'+experiment_name;
+    out_dir_meta='../scratch/'+experiment_name;
     util.mkdir(out_dir_meta);
     out_script='../scripts/test_'+experiment_name;
     # +'.sh';
@@ -430,7 +444,7 @@ def writeCKScripts_viz_inc():
 
     dir_files='../data/ck_96/train_test_files';
     # resume_dir_meta='../experiments/khorrami_basic_aug_fix_resume'
-    num_folds=10;
+    num_folds=1;
 
     resume_dir_meta=None
     noBias=False;
@@ -464,24 +478,33 @@ def writeCKScripts_viz_inc():
 
 
 def writeHTMLs_viz_inc():
-    experiment_name='ck_inc_viz';
-    out_dir_meta=os.path.join(dir_server,'expression_project','experiments/'+experiment_name);
-    dir_files='../data/ck_96/train_test_files';
-    num_folds=10;
+    # experiment_name='ck_inc_viz';
+    # out_dir_meta=os.path.join(dir_server,'expression_project','experiments/'+experiment_name);
+    # dir_files='../data/ck_96/train_test_files';
+    # num_folds=10;
+    # epoch_range=list(range(100,1100,100));
 
-    expressions=range(1,9);
+    experiment_name='test_mean_blur';
+    out_dir_meta=os.path.join(dir_server,'expression_project','scratch/'+experiment_name);
+    dir_files='../data/ck_96/train_test_files';
+    num_folds=1;
+    epoch_range=list(range(100,200,100));
+
+
+    expressions=[None]
+    # range(1,9);
     right=True;
 
     npy_file_pred='1_pred_labels.npy';
     npy_file_gt='1_gt_labels.npy';
-    posts=['_org','_gb_gcam','_gb_gcam_pred','_hm','_hm_pred','_gb_gcam_org','_gb_gcam_org_pred']
+    posts=['_org','_gb_gcam','_gb_gcam_pred','_hm','_hm_pred','_gb_gcam_org','_gb_gcam_org_pred',
+            '_gb_gcam_th','_gb_gcam_th_pred',
+            '_blur','_blur_pred']
     
     # num_folds=1;
     # im_posts=[pre+exp_curr+'.jpg' for pre in pres for exp_curr in expressions]; 
     
 
-    epoch_range=list(range(100,1100,100));
-        # ,1100,100));
     
     batchSizeTest=128;
     for expression_curr in expressions:
@@ -495,7 +518,10 @@ def writeHTMLs_viz_inc():
             gt_labels=np.load(gt_labels_file);    
             num_batches=int(math.ceil(len(gt_labels)/128.0))
             im_pre=np.array([str(batch_num)+'_'+str(im_num) for batch_num in range(1,num_batches+1) for im_num in range(1,batchSizeTest+1)]);
-            bin_keep=gt_labels==expression_curr;
+            if expression_curr is not None:
+                bin_keep=gt_labels==expression_curr;
+            else:
+                bin_keep=gt_labels==gt_labels
             gt_rel=gt_labels[bin_keep]
             im_pre_rel=im_pre[bin_keep];
 
@@ -555,8 +581,96 @@ def writeTestGradCamScript():
 
 
 
+def writeScriptSchemesFixThresh():
+
+    dir_exp_old='../experiments/khorrami_ck_rerun';
+    
+
+    experiment_name='ck_meanBlur_fixThresh_100_inc';
+    out_dir_meta_meta='../experiments/'+experiment_name;
+    util.mkdir(out_dir_meta_meta);
+    out_script='../scripts/train_'+experiment_name+'_mix';
+    num_scripts=2;
+    
+
+    util.mkdir(out_dir_meta_meta);
+    folds_range=[6];
+    epoch_starts=range(100,600,100);
+    startingActivation=0.05;
+    fixThresh=0.05;
+    activationThreshMax=0.5;
+    # schemes=['ncl','mixcl']
+    # ,'mix'];
+    schemes=['mix'];
+    path_to_th='train_khorrami_withBlur.th';
+
+    dir_files='../data/ck_96/train_test_files';
+    
+    # batchSizeTest=128;
+    batchSize=128;
+    ratioBlur=0.5;
+
+    commands=[];
+    for fold_num in folds_range:
+        data_file=os.path.join(dir_files,'train_'+str(fold_num)+'.txt');
+        num_lines=len(util.readLinesFromFile(data_file));
+        epoch_size=num_lines/batchSize;
+        for scheme in schemes:
+            out_dir_meta=os.path.join(out_dir_meta_meta,scheme);
+            util.mkdir(out_dir_meta);
+            for epoch_start in epoch_starts: 
+                out_dir_meta_curr=os.path.join(out_dir_meta,str(epoch_start));
+                util.mkdir(out_dir_meta_curr);
+                if scheme=='mix':
+                    activationThreshMax=fixThresh*1000/epoch_start;
+                    command=writeBlurScript(path_to_th,out_dir_meta_curr,dir_files,fold_num,
+                                            batchSize=batchSize,
+                                            scheme=scheme,
+                                            ratioBlur=ratioBlur,
+                                            incrementDifficultyAfter=0,
+                                            startingActivation=0,
+                                            fixThresh=fixThresh,
+                                            activationThreshMax=activationThreshMax,
+                                            iterations=1000)
+                else:
+                    resume_model=os.path.join(dir_exp_old,str(fold_num),'intermediate','model_all_'+str(epoch_start*epoch_size)+'.dat');
+                    assert(os.path.exists(resume_model));
+                    command=writeBlurScript(path_to_th,out_dir_meta_curr,dir_files,fold_num,
+                                            batchSize=batchSize,
+                                            model_file=resume_model,
+                                            scheme=scheme,
+                                            ratioBlur=ratioBlur,
+                                            incrementDifficultyAfter=epoch_start,
+                                            startingActivation=startingActivation,
+                                            fixThresh=fixThresh,
+                                            activationThreshMax=activationThreshMax,
+                                            iterations=1000-epoch_start)
+                
+                commands.append(command);
+
+    len(commands)
+    commands=np.array(commands);
+    commands_split=np.array_split(commands,num_scripts);
+    for idx_commands,commands in enumerate(commands_split):
+        out_file_script_curr=out_script+'_'+str(idx_commands)+'.sh';
+        print idx_commands,out_file_script_curr,len(commands)
+        # print commands;
+        util.writeFile(out_file_script_curr,commands);
+
+
 def main():
-    writeHTMLs_viz_inc();
+    writeScriptSchemesFixThresh()
+    # out_dir_meta='../experiments/khorrami_ck_rerun'
+    # num_folds=10;
+    # for fold_num in range(num_folds):
+    #     test_file=os.path.join(out_dir_meta,str(fold_num),'test_images','log_test.txt');
+    #     print test_file
+    #     lines=util.readLinesFromFile(test_file);
+    #     print fold_num
+    #     print lines[-1];
+
+    # writeTFDSchemeScripts();
+    # writeHTMLs_viz_inc();
     # writeCKScripts_viz_inc();
     # script_vizTestGradCam()
     # writeCKScripts()
