@@ -374,10 +374,18 @@ function main(params)
             else
                 num_inc=math.floor(params.iterations/params.incrementDifficultyAfter);
             end
-
-            activationThresh_increment = (params.activationThreshMax-activationThresh)/num_inc;
+            -- print (num_inc);
+            if num_inc~=0 then
+                activationThresh_increment = (params.activationThreshMax-activationThresh)/num_inc;
+            end
         end 
-        activation_upper=torch.range(0,params.activationThreshMax,activationThresh_increment);
+        -- print (activationThresh_increment)
+        if activationThresh_increment==0 then
+            activation_upper=torch.range(0,params.activationThreshMax,params.activationThreshMax);
+        else
+            activation_upper=torch.range(0,params.activationThreshMax,activationThresh_increment);
+        end
+        
         print ('num_inc,activationThresh_increment',num_inc,activationThresh_increment);    
     end
 
@@ -598,7 +606,7 @@ cmd:option('-saveAfter',10*epoch_size,'num of iterations after which to save mod
 cmd:option('-batchSize',128,'batch size');
 cmd:option('-testAfter',10*epoch_size,'num iterations after which to get validation loss');
 cmd:option('-dispAfter',1,'num iterations after which to display training loss');
-cmd:option('-dispPlotAfter',10*epoch_size,'num iterations after which to display training loss');
+cmd:option('-dispPlotAfter',10*epoch_size,'num iterations after which to plot loss curves');
 
 cmd:option('-val_data_path','../data/ck_96/train_test_files/test_0.txt')
 cmd:option('-data_path','../data/ck_96/train_test_files/train_0.txt')
