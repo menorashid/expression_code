@@ -401,7 +401,8 @@ function main(params)
                     conv_size=params.conv_size,
                     net=net:clone(),
                     net_gb=net_gb:clone(),
-                    optimize=params.optimize
+                    optimize=params.optimize,
+                    twoClass=params.twoClass
                     };
 
 	local td=data_face(data_params);
@@ -412,7 +413,8 @@ function main(params)
                     mean_file=params.mean_im_path,
                     std_file=params.std_im_path,
                     augmentation=false,
-                    limit=params.limit};
+                    limit=params.limit,
+                    twoClass=params.twoClass};
     	vd=data_face(data_params);
 	end
 
@@ -428,12 +430,15 @@ function main(params)
 
 
     local criterion;
+    if params.twoClass then
     -- if params.weights_file then
     --     local criterion_weights=npy4th.loadnpy(params.weights_file);
     --     criterion=nn.CrossEntropyCriterion(criterion_weights):cuda()
     -- else
-    criterion=nn.CrossEntropyCriterion():cuda()
-    -- end
+        criterion=nn.SoftMarginCriterion():cuda();
+    else
+        criterion=nn.CrossEntropyCriterion():cuda()
+    end
     
     -- local criterion = nn.ClassNLLCriterion(criterion_weights):cuda();
 
@@ -493,9 +498,31 @@ function main(params)
             -- end
 
             local outputs=net:forward(batch_inputs);
-            local maxs, indices = torch.max(outputs, 2);
-            indices=indices:type(batch_targets:type());
+            local indices;
+            if params.twoClass then
+                -- print (outputs:type(),outputs:size());
+                -- print (outputs:size(),batch_targets:size())
+                -- print (torch.min(outputs),torch.max(outputs))
+                -- print (torch.min(batch_targets),torch.max(batch_targets))
+                local outputs_d=outputs:double()
+                indices=torch.zeros(outputs:size());
+                indices[outputs_d:gt(0)]=1;
+                indices[outputs_d:le(0)]=-1;
+                -- print (indices:type(),indices:size());
+                -- for idx_curr=1,outputs:size(1) do
+                --     if outputs[idx_curr][1]>0 then
+                --         indices[idx_curr]=1;
+                --     else
+                --         indices[idx_curr]=-1;
+                --     end
+                -- end
+            else
+                local maxs;
+                maxs, indices = torch.max(outputs, 2);
+            end
+
             indices=indices:view(batch_targets:size());
+            indices=indices:type(batch_targets:type());
             local loss = torch.sum(batch_targets:eq(indices))/batch_targets:nElement();
             
             val_losses[#val_losses+1]=loss;
@@ -624,6 +651,7 @@ cmd:option('-gpu',1,'gpu to run the training on');
 cmd:option('-outDir',temp);
 cmd:option('-modelTest',paths.concat(temp,'final/model_all_final.dat'));
 
+cmd:option('-twoClass',false);
 
 params = cmd:parse(arg)
 main(params);    

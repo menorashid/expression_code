@@ -10,7 +10,7 @@ do
         self.std_file=args.std_file;
         self.limit=args.limit;
         self.augmentation=args.augmentation;
-        
+        self.twoClass=args.twoClass;        
         print ('self.augmentation',self.augmentation);
 
         self.start_idx_face=1;
@@ -623,7 +623,11 @@ do
             if status_img_face then
                 img_face=self:processIm(img_face)
                 training_set.data[curr_idx]=img_face;
-                training_set.label[curr_idx]=tonumber(label_face)+1;
+                if self.twoClass then
+                    training_set.label[curr_idx]=tonumber(label_face);
+                else
+                    training_set.label[curr_idx]=tonumber(label_face)+1;
+                end
                 training_set.input[curr_idx]=img_path_face;
             else
                 print ('PROBLEM READING INPUT');

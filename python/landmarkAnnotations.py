@@ -8,6 +8,7 @@ from skimage import io;
 import math;
 import random;
 import preprocess_data;
+import scripts_and_viz
 
 dir_server='/home/SSD3/maheen-data/';
 click_str='http://vision1.idav.ucdavis.edu:1000/';
@@ -40,13 +41,15 @@ def saveHappyNeutralTrainTest():
 
 	classes_to_keep=[0,5];
 	class_labels=['neutral','happy'];
+	new_labels=['-1','1']
 
 	lines_classes=[int(line_curr.split(' ')[1]) for line_curr in lines_all];
 	lines_classes=np.array(lines_classes);
 	lines_all=np.array(lines_all)
 	class_lines=[];
-	for class_to_keep in classes_to_keep:
+	for new_label,class_to_keep in zip(new_labels,classes_to_keep):
 		lines_curr=lines_all[lines_classes==class_to_keep]
+		lines_curr=[line_curr.split(' ')[0]+' '+str(new_label) for line_curr in lines_curr];
 		class_lines.append(np.sort(lines_curr));
 	
 	ratio_train=0.9;
@@ -83,11 +86,8 @@ def getAnnoString(annos,annos_to_keep,avg_nums):
 		annos_curr_tot=annos_curr_tot/len(annos_idx)
 		annos_all.append(annos_curr_tot);
 
-	# print annos_all;
-	# print avg_nums;
 	annos_final=[];
 	for supp_num in avg_nums:
-		# print supp_num
 		anno_curr=(annos_all[supp_num[0]]+annos_all[supp_num[1]])/2;
 
 		annos_final.extend(list(anno_curr));
@@ -101,7 +101,6 @@ def writeTrainTestFilesWithAnno():
 	out_dir=os.path.join(dir_server,'expression_project','scratch',in_file_pre+'_anno');
 	data_dir='../data/ck_96/train_test_files';
 	util.mkdir(out_dir);
-
 
 	annos_to_keep=[[48],[54],[62,66]];
 	avg_nums=[[0,0],[1,1],[2,2],[0,2],[1,2]];
@@ -120,62 +119,52 @@ def writeTrainTestFilesWithAnno():
 			im_file=line_curr.split(' ')[0]
 			if im_num%100==0:
 				print im_num,len(lines_old);
-			# im_name=os.path.split(im_file)[1];
-			# im_name=im_name[:im_name.rindex('.')]
-			# out_file=os.path.join(out_dir,im_name+'.jpg');
-
 			annos=getAnnoNumpy(im_file,detector,predictor);
 			annos_string=getAnnoString(annos,annos_to_keep,avg_nums);
 			lines_new.append(line_curr+' '+annos_string)			
-			# print annos_string
 			
-			# im=cv2.imread(im_file);
-			# annos=[int(num) for num in annos_string.split(' ')]
-			# annos=np.reshape(np.array(annos),(5,2))
-			# for anno_curr in annos:
-			# 	cv2.circle(im,tuple(anno_curr),1,(0,255,0),-1);
-			# cv2.imwrite(out_file,im);
-			# print out_file;
-			# break;
 		util.writeFile(out_file,lines_new);
 		print out_file;
-	# visualize.writeHTMLForFolder(out_dir);	
+	
 
 def main():
 	
-	
-	writeTrainTestFilesWithAnno()
+	# saveHappyNeutralTrainTest()
+	# writeTrainTestFilesWithAnno()
 
 
-	return
+	path_to_th='train_khorrami_withBlur.th';
+	out_dir_meta='../experiments/happy_neutral/bl';
+	util.makedirs(out_dir_meta);
+	dir_files='../data/ck_96/train_test_files';
+	fold_num='happy_neutral';
+	model_file='../models/base_khorrami_model_1.dat'
+	iterations=300;
+	saveAfter=30;
 
-	data_dir='../../dlib-19.4.0/examples';
-	out_dir=os.path.join(dir_server,'expression_project/scratch/anno_viz');
-	util.mkdir(out_dir);
-	im_pre='im';
-	out_file=os.path.join(out_dir,im_pre+'.jpg');
-	image_file=os.path.join(data_dir,im_pre+'.jpg');
-	npy_file=os.path.join(data_dir,im_pre+'.npy')
-	annos=np.load(npy_file);
-	# print annos;
+	twoClass=True;
 
-	im=cv2.imread(image_file);
-
-	ims_html=[];
-	captions_html=[];
-	for anno_num,anno_curr in enumerate(annos):
-		im_curr=im.copy();
-		cv2.circle(im_curr, tuple(anno_curr),2, (0,0,255), -1)
-		out_file_curr=os.path.join(out_dir,str(anno_num)+'.jpg')
-		cv2.imwrite(out_file_curr,im_curr);
-		if anno_num>=48:
-			ims_html.append([util.getRelPath(out_file_curr,dir_server)]);
-			captions_html.append([str(anno_num)]);
-		# print out_file;
-	out_file_html=os.path.join(out_dir,'anno_nums.html');
-	visualize.writeHTML(out_file_html,ims_html,captions_html);
-	print out_file_html.replace(dir_server,click_str);
-	# visualize.writeHTMLForFolder(out_dir);
+	command = scripts_and_viz.writeBlurScript(path_to_th,out_dir_meta,dir_files,fold_num,model_file=model_file,twoClass=twoClass,iterations=iterations,saveAfter=saveAfter);
+	print command;
+ #    fold_num,
+ #    model_file=None,
+ #    batchSize=128,
+ #    learningRate=0.01,
+ #    scheme='ncl',
+ #    ratioBlur=0,
+ #    incrementDifficultyAfter=-1,
+ #    startingActivation=0,
+ #    fixThresh=-1,
+ #    activationThreshMax=0.5,
+ #    iterations=1000,
+ #    saveAfter=100,
+ #    testAfter=10,
+ #    dispAfter=1,
+ #    dispPlotAfter=10,
+ #    batchSizeTest=128,
+ #    modelTest=None,
+ #    resume_dir_meta=None
+ #    )
 
 
 

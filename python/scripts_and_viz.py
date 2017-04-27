@@ -30,7 +30,8 @@ def writeBlurScript(\
     dispPlotAfter=10,
     batchSizeTest=128,
     modelTest=None,
-    resume_dir_meta=None
+    resume_dir_meta=None,
+    twoClass=False
     ):
     data_path=os.path.join(dir_files,'train_'+str(fold_num)+'.txt');
     val_data_path=os.path.join(dir_files,'test_'+str(fold_num)+'.txt');
@@ -83,6 +84,10 @@ def writeBlurScript(\
         command = command+['-modelTest',os.path.join(outDir,'final','model_all_final.dat')];
     else:
         command = command+['-modelTest',modelTest];
+
+    if twoClass:
+        command = command+['-twoClass'];
+    
     command = [str(c_curr) for c_curr in command];
     command=' '.join(command);
     return command;
