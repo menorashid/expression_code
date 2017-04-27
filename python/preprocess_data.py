@@ -1,19 +1,19 @@
 import numpy as np;
-# import cv2;
+import cv2;
 import util;
 import os;
 import visualize;
-# import scipy;
-# import scipy.io;
+import scipy;
+import scipy.io;
 import multiprocessing;
-# import subprocess;
+import subprocess;
 import sys;
 import random;
 import re;
 import csv;
 dir_server='/home/SSD3/maheen-data/';
 click_str='http://vision1.idav.ucdavis.edu:1000/';
-# import urllib
+import urllib
 import time;
 
 def saveCroppedFace(in_file,out_file,im_size=None,classifier_path=None,savegray=True):
