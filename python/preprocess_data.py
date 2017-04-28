@@ -802,12 +802,82 @@ def makeTrainTestExp():
     # print ref_data;
 
 
+def visualizeTestData():
+    data_dir='../data/tfd/train_test_files';
+    data_set='tfd_ckLabels';
+    num_folds=5;
+    num_classes=8;
+    
+    # data_dir='../data/ck_96/train_test_files';
+    # data_set='ck';
+    # num_folds=10;
+    # num_classes=8;
+
+    test_pre='test_ckLabels_';
+    replace_path=['..',os.path.join(dir_server,'expression_project')];
+    out_dir_html=os.path.join(replace_path[1],'scratch','view_tfd_classes');
+    util.mkdir(out_dir_html);
+    
+    out_file_html=os.path.join(out_dir_html,data_set+'.html');
+    
+
+    img_paths=[];
+    captions=[];
+    for class_num in range(num_classes):
+        img_paths.append([]);
+        captions.append([]);
+    
+    for num_fold in range(num_folds):
+        test_file_curr=os.path.join(data_dir,test_pre+str(num_fold)+'.txt');
+        data=util.readLinesFromFile(test_file_curr);
+        for line_curr in data:
+            im_curr=line_curr.split(' ');
+            label_curr=im_curr[1];
+            im_curr=util.getRelPath(im_curr[0].replace(replace_path[0],replace_path[1]),dir_server);
+            img_paths[int(label_curr)].append(im_curr);
+            captions[int(label_curr)].append(label_curr);
+
+    visualize.writeHTML(out_file_html,img_paths,captions);
+    print out_file_html.replace(dir_server,click_str);
+
+def modifyTFDClassesForCK():
+
+    data_dir='../data/tfd/train_test_files';
+    in_pre='test_';
+    out_pre='test_ckLabels_';
+    num_folds=5;
+
+    for num_fold in range(num_folds):
+        in_file=os.path.join(data_dir,in_pre+str(num_fold)+'.txt');
+        out_file=os.path.join(data_dir,out_pre+str(num_fold)+'.txt');
+        lines=util.readLinesFromFile(in_file);
+        lines_new=[];
+        for line_curr in lines:
+            line_curr=line_curr.split(' ');
+            label=int(line_curr[1]);
+            if label==0:
+                label=1;
+            elif label==6:
+                label=0;
+            else:
+                label=label+2;
+            line_curr=line_curr[0]+' '+str(label);
+            lines_new.append(line_curr);
+        print out_file;
+        util.writeFile(out_file,lines_new);
 
 
 
 def main(args):
+
+    # modifyTFDClassesForCK();
+    visualizeTestData();
+
+
+
+
     # mappingCheck();
-    makeTrainTestExp();
+    # makeTrainTestExp();
     # makeTrainTestAu();
 
     # util.writeFile(out_file,lines_all);
