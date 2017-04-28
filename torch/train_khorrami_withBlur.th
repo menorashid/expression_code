@@ -504,7 +504,7 @@ function main(params)
                 -- print (outputs:size(),batch_targets:size())
                 -- print (torch.min(outputs),torch.max(outputs))
                 -- print (torch.min(batch_targets),torch.max(batch_targets))
-                local outputs_d=outputs:double()
+                local outputs_d=outputs:double();
                 indices=torch.zeros(outputs:size());
                 indices[outputs_d:gt(0)]=1;
                 indices[outputs_d:le(0)]=-1;

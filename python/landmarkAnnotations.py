@@ -139,12 +139,12 @@ def main():
 	dir_files='../data/ck_96/train_test_files';
 	fold_num='happy_neutral';
 	model_file='../models/base_khorrami_model_1.dat'
-	iterations=300;
+	iterations=600;
 	saveAfter=30;
-
+	learningRate=0.01;
 	twoClass=True;
 
-	command = scripts_and_viz.writeBlurScript(path_to_th,out_dir_meta,dir_files,fold_num,model_file=model_file,twoClass=twoClass,iterations=iterations,saveAfter=saveAfter);
+	command = scripts_and_viz.writeBlurScript(path_to_th,out_dir_meta,dir_files,fold_num,model_file=model_file,twoClass=twoClass,iterations=iterations,saveAfter=saveAfter,learningRate=learningRate);
 	print command;
  #    fold_num,
  #    model_file=None,
