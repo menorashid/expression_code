@@ -31,8 +31,10 @@ function main(params)
     local out_dir_images=paths.concat(out_dir,'test_images');
     paths.mkdir(out_dir_images);
     
+    local net=torch.load(params.model);
+
     
-    local data_params={file_path=data_path,
+    local data_params={file_path=params.val_data_path,
 					batch_size=params.batchSize,
 					mean_file=params.mean_im_path,
 					std_file=params.std_im_path,
@@ -41,38 +43,55 @@ function main(params)
                     ratio_blur=params.ratioBlur,
                     activation_upper=activation_upper,
                     conv_size=params.conv_size,
-                    net=nil,
-                    net_gb=nil,
+                    net=net:clone(),
+                    -- net_gb=nil,
                     optimize=params.optimize,
                     twoClass=params.twoClass,
                     numAnnos=params.numAnnos
                     };
 
 	local td=data_face(data_params);
-    for batch_num=1,4 do
-        td:getTrainingData();
-        local im_all=td:unMean(td.mean_batch,td.std_batch);
+    local pointSize=15;
 
+    net=net:cuda();
+    net:evaluate();
+    -- local bin_blur=torch.Tensor({1,1,1,1,1})
+    -- local bin_blur=torch.Tensor({0,0,0,0,0})
+    local batch_num=1;
+    
+    for pointToBlur=1,5,1 do
+        local bin_blur=torch.zeros(5);
+        bin_blur[pointToBlur]=1;
+        td:buildBlurryBatch(pointSize,bin_blur);
+        local preds=net:forward(td.training_set.data:clone());
+        local indices=torch.zeros(preds:size()):type(preds:type());
+        indices[preds:gt(0)]=1;
+        indices[preds:le(0)]=-1;
+        indices=indices:view(td.training_set.label:size())
+        local bin_keep=td.training_set.label:eq(indices)
+        
+        print (pointToBlur,torch.sum(bin_keep)/td.training_set.label:nElement());
+
+        local im_all;
+        if params.augmentation then
+            im_all=td.training_set.data;
+        else
+            im_all=td:unMean(td.mean_batch:cuda(),td.std_batch:cuda());
+        end
         -- local im_all=td.training_set.data;
         local labels=td.training_set.labels;
         local annos_all=td.training_set.anno;
         for im_num=1,im_all:size(1) do
             local im_curr=im_all[im_num];
-            im_curr=torch.cat(im_curr,im_curr:clone(),1):cat(im_curr:clone(),1);
-
             local annos_curr=annos_all[im_num];
-            -- print (im_curr:size());
             local out_file_curr=paths.concat(out_dir_images,batch_num..'_'..im_num..'.jpg');
 
-            im_curr=visualize:drawKeyPoints(im_curr,annos_curr:t(),nil,{{0,255,0}},3);
             image.save(out_file_curr,image.toDisplayTensor(im_curr));
-
         end
-        break;
+
     end
 
     local py_str='python ../python/visualizeForFolder.py '..out_dir_images..' '..'.jpg';
-    print (py_str);
     os.execute(py_str)
 end
 
@@ -90,12 +109,13 @@ local temp ='../scratch/test_anno_points'
 -- '../experiments/khorrami_withBlur_test/fix_'..scheme;
 
 
-cmd:option('-model','../models/base_khorrami_model_1.dat');
+-- cmd:option('-model','../models/base_khorrami_model_1.dat');
+cmd:option('-model','../experiments/happy_neutral/bl/happy_neutral_withAnno/final/model_all_final.dat');
 cmd:option('-mean_im_path','../data/ck_96/train_test_files/train_happy_neutral_mean.png');
 cmd:option('-std_im_path','../data/ck_96/train_test_files/train_happy_neutral_std.png');
 
 cmd:option('-limit',-1,'num of training data to read');
-cmd:option('-iterations',100*epoch_size,'num of iterations to run');
+cmd:option('-iterations',1,'num of iterations to run');
 
 cmd:option('-ratioBlur',1);
 cmd:option('-startingActivation',0);
@@ -107,10 +127,10 @@ cmd:option('-conv_size',5);
 cmd:option('-layer_to_viz',8);
 cmd:option('-optimize',true);
 cmd:option('-numAnnos',5);
--- cmd:option('-overwrite',true);
+cmd:option('-overwrite',true);
 
 cmd:option('-saveAfter',10*epoch_size,'num of iterations after which to save model');
-cmd:option('-batchSize',10,'batch size');
+cmd:option('-batchSize',54,'batch size');
 cmd:option('-testAfter',10*epoch_size,'num iterations after which to get validation loss');
 cmd:option('-dispAfter',1,'num iterations after which to display training loss');
 cmd:option('-dispPlotAfter',10*epoch_size,'num iterations after which to plot loss curves');
@@ -125,7 +145,7 @@ cmd:option('learningRate', 1e-2)
 cmd:option('weightDecay', 1e-5)
 cmd:option('momentum', 0.9)
 
-cmd:option('augmentation' , true);
+cmd:option('augmentation' , false);
 
 cmd:option('-gpu',1,'gpu to run the training on');
 cmd:option('-outDir',temp);

@@ -133,18 +133,19 @@ def main():
 	# writeTrainTestFilesWithAnno()
 
 
-	path_to_th='train_khorrami_withBlur.th';
+	path_to_th='train_withAnno.th';
 	out_dir_meta='../experiments/happy_neutral/bl';
 	util.makedirs(out_dir_meta);
 	dir_files='../data/ck_96/train_test_files';
-	fold_num='happy_neutral';
+	fold_num='happy_neutral_withAnno';
 	model_file='../models/base_khorrami_model_1.dat'
-	iterations=600;
-	saveAfter=30;
+	iterations=150;
+	saveAfter=5;
+	testAfter=1;
 	learningRate=0.01;
 	twoClass=True;
 
-	command = scripts_and_viz.writeBlurScript(path_to_th,out_dir_meta,dir_files,fold_num,model_file=model_file,twoClass=twoClass,iterations=iterations,saveAfter=saveAfter,learningRate=learningRate);
+	command = scripts_and_viz.writeBlurScript(path_to_th,out_dir_meta,dir_files,fold_num,model_file=model_file,twoClass=twoClass,iterations=iterations,saveAfter=saveAfter,learningRate=learningRate,testAfter=testAfter);
 	print command;
  #    fold_num,
  #    model_file=None,
