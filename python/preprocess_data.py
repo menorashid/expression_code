@@ -866,12 +866,27 @@ def modifyTFDClassesForCK():
         print out_file;
         util.writeFile(out_file,lines_new);
 
-
-
+def combineTFDCkFiles():
+    num_folds=5;
+    dir_data='../data/tfd/train_test_files';
+    in_pre='test_ckLabels_';
+    out_file=os.path.join(dir_data,in_pre+'all.txt');
+    lines_all=[];
+    for num_fold in range(num_folds):
+        file_curr=os.path.join(dir_data,in_pre+str(num_fold)+'.txt')
+        lines_all.extend(util.readLinesFromFile(file_curr));
+    
+    print len(lines_all)
+    lines_all=list(set(lines_all))
+    print len(lines_all)
+    util.writeFile(out_file,lines_all);
+    
 def main(args):
 
+    combineTFDCkFiles();
+
     # modifyTFDClassesForCK();
-    visualizeTestData();
+    # visualizeTestData();
 
 
 

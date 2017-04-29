@@ -31,10 +31,12 @@ def writeBlurScript(\
     batchSizeTest=128,
     modelTest=None,
     resume_dir_meta=None,
-    twoClass=False
+    twoClass=False,
+    val_data_path=None
     ):
     data_path=os.path.join(dir_files,'train_'+str(fold_num)+'.txt');
-    val_data_path=os.path.join(dir_files,'test_'+str(fold_num)+'.txt');
+    if val_data_path is None:
+        val_data_path=os.path.join(dir_files,'test_'+str(fold_num)+'.txt');
     mean_im_path=os.path.join(dir_files,'train_'+str(fold_num)+'_mean.png');
     std_im_path=os.path.join(dir_files,'train_'+str(fold_num)+'_std.png');
 
@@ -87,7 +89,7 @@ def writeBlurScript(\
 
     if twoClass:
         command = command+['-twoClass'];
-    
+
     command = [str(c_curr) for c_curr in command];
     command=' '.join(command);
     return command;
@@ -811,10 +813,33 @@ def createComparativeHtml():
         visualize.writeHTML(out_file_html,ims_all,captions_all,100,100);
         print out_file_html.replace(dir_server,click_str);
 
-def main():
+def printTestAccuracy():
+    dir_meta='../experiments/ck_meanBlur_fixThresh_100_inc';
+    schemes=['mixcl','ncl'];
+    # schemes=['mix'];
+    inc_range=range(100,600,100);
+    num_fold=6;
+    for scheme in schemes:
+        for inc in inc_range:
+            file_curr=os.path.join(dir_meta,scheme,str(inc),str(num_fold),'test_images','log_test.txt');
+            lines=util.readLinesFromFile(file_curr);
+            print file_curr
+            print scheme,inc
+            print lines[-1];
 
-    writeScriptSchemesAutoThresh()
     return
+    # writeScriptSchemesFixThresh()
+    out_dir_meta='../experiments/khorrami_ck_rerun'
+    num_folds=10;
+    for fold_num in range(num_folds):
+        test_file=os.path.join(out_dir_meta,str(fold_num),'test_images','log_test.txt');
+        print test_file
+        lines=util.readLinesFromFile(test_file);
+        print fold_num
+        print lines[-1];
+
+
+def createComparativeHTMLs_diffTypes_1():
     experiment_name='scheme_200_inc';
     out_dir_meta_meta=os.path.join(dir_server,'expression_project','experiments',experiment_name);
     dir_files='../data/ck_96/train_test_files';
@@ -876,9 +901,7 @@ def main():
             visualize.writeHTML(out_file_html,ims_all,captions_all,100,100);
             print out_file_html.replace(dir_server,click_str);
 
-
-
-    return
+def createComparativeHTMLs_diffTypes_2():
     experiment_name='scheme_200_inc';
     # out_dir_meta='../experiments/'+experiment_name;
     out_dir_meta='../experiments/'+experiment_name;
@@ -947,31 +970,62 @@ def main():
         util.writeFile(out_file_script_curr,commands);
 
 
-    return
+def writeScriptTFDTestsDiffSchemes():
+    out_dir_meta_meta='../experiments';
+    # out_dir_metas=[os.path.join(out_dir_meta_meta,dir_curr) for dir_curr in ['ck_meanBlur_fixThresh_100_inc','ck_meanBlur_autoThresh_100_inc']];
+    # schemes=['mixcl','ncl'];
+    incs=[str(num) for num in range(100,600,100)];
 
-    dir_meta='../experiments/ck_meanBlur_fixThresh_100_inc';
-    schemes=['mixcl','ncl'];
-    # schemes=['mix'];
-    inc_range=range(100,600,100);
+    out_dir_metas=[os.path.join(out_dir_meta_meta,dir_curr) for dir_curr in ['ck_meanBlur_fixThresh_100_inc']];
+    schemes=['bl'];
+    num_scripts=1;
+    incs=['None']
+    
+
+    test_file='../data/tfd/train_test_files/test_ckLabels_all.txt';
+    data_dir='../data/tfd/train_test_files';
     num_fold=6;
-    for scheme in schemes:
-        for inc in inc_range:
-            file_curr=os.path.join(dir_meta,scheme,str(inc),str(num_fold),'test_images','log_test.txt');
-            lines=util.readLinesFromFile(file_curr);
-            print file_curr
-            print scheme,inc
-            print lines[-1];
+    
+    out_script='../scripts/test_tfd_ck_scheme';
 
-    return
-    # writeScriptSchemesFixThresh()
-    out_dir_meta='../experiments/khorrami_ck_rerun'
-    num_folds=10;
-    for fold_num in range(num_folds):
-        test_file=os.path.join(out_dir_meta,str(fold_num),'test_images','log_test.txt');
-        print test_file
-        lines=util.readLinesFromFile(test_file);
-        print fold_num
-        print lines[-1];
+    path_to_th='train_khorrami_withBlur.th';
+
+    models=[os.path.join(out_dir_meta_curr,scheme_curr,str(num_fold),'final','model_all_final.dat') for out_dir_meta_curr in out_dir_metas for scheme_curr in schemes];
+    
+    commands=[];
+    for out_dir_meta in out_dir_metas:
+        for scheme in schemes:
+            for epoch_num in incs:
+                out_dir_curr=os.path.join(out_dir_meta,'results_tfd',scheme,epoch_num);
+                util.makedirs(out_dir_curr)
+                if epoch_num is not 'None':
+                    model_curr=os.path.join(out_dir_meta,scheme,epoch_num,str(num_fold),'final','model_all_final.dat');
+                else:
+                    model_curr=os.path.join(out_dir_meta,scheme,str(num_fold),'final','model_all_final.dat');
+                assert (os.path.exists(model_curr))
+                command_curr=writeBlurScript(path_to_th,out_dir_curr,data_dir,0,val_data_path=test_file,modelTest=model_curr);
+                commands.append(command_curr);
+
+    commands=np.array(commands);
+    print commands.shape
+    commands_split=np.array_split(commands,num_scripts);
+    for idx_commands,commands in enumerate(commands_split):
+        out_file_script_curr=out_script+'_'+str(idx_commands)+'.sh';
+        print idx_commands
+        print out_file_script_curr
+        # print commands;
+        util.writeFile(out_file_script_curr,commands);
+
+
+
+
+
+def main():
+
+    writeScriptTFDTestsDiffSchemes()
+
+    # writeScriptSchemesAutoThresh()
+    
 
     # writeTFDSchemeScripts();
     # writeHTMLs_viz_inc();

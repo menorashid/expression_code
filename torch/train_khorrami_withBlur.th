@@ -169,9 +169,9 @@ function test(params)
     for i=1,params.iterationsTest do
         -- vd:getTrainingData();
         local out_file_pre=paths.concat(out_dir_images,i..'_');
-        vd:buildBlurryBatch(params.layer_to_viz,0.0,'ncl',out_file_pre,true);
+        -- vd:buildBlurryBatch(params.layer_to_viz,0.0,'ncl',out_file_pre,true);
             -- ,true)
-        -- vd:getTrainingData();
+        vd:getTrainingData();
         vd.training_set.data=vd.training_set.data:cuda();
         vd.training_set.label=vd.training_set.label:cuda();
         local batch_inputs=vd.training_set.data;
@@ -654,7 +654,7 @@ cmd:option('-modelTest',paths.concat(temp,'final/model_all_final.dat'));
 cmd:option('-twoClass',false);
 
 params = cmd:parse(arg)
-main(params);    
+-- main(params);    
 
 -- cmd:option('-iterations',1,'num of iterations to run');
 -- cmd:option('-batchSize',132,'batch size');
