@@ -236,7 +236,8 @@ function test(params)
     -- print (outputs_all:size())
     -- print (batch_targets_all:size());
 
-    local conf = optim.ConfusionMatrix( {'neutral', 'anger','contempt','disgust', 'fear', 'happy', 'sadness', 'surprise'} )
+    -- local conf = optim.ConfusionMatrix( {'neutral', 'anger','contempt','disgust', 'fear', 'happy', 'sadness', 'surprise'} )
+    local conf = optim.ConfusionMatrix( {'anger','disgust', 'fear', 'happy', 'sadness', 'surprise','neutral'} )
     conf:zero()    
     conf:batchAdd( outputs_all, batch_targets_all )         -- accumulate errors
     print (conf);
@@ -654,7 +655,7 @@ cmd:option('-modelTest',paths.concat(temp,'final/model_all_final.dat'));
 cmd:option('-twoClass',false);
 
 params = cmd:parse(arg)
--- main(params);    
+main(params);    
 
 -- cmd:option('-iterations',1,'num of iterations to run');
 -- cmd:option('-batchSize',132,'batch size');

@@ -590,28 +590,45 @@ def writeTestGradCamScript():
 
 def writeScriptSchemesFixThresh():
 
-    dir_exp_old='../experiments/khorrami_ck_rerun';
+    # dir_exp_old='../experiments/khorrami_ck_rerun';
     
 
-    experiment_name='ck_meanBlur_fixThresh_100_inc';
-    out_dir_meta_meta='../experiments/'+experiment_name;
-    util.mkdir(out_dir_meta_meta);
-    out_script='../scripts/train_'+experiment_name+'_mix';
-    num_scripts=2;
+    # experiment_name='ck_meanBlur_fixThresh_100_inc';
+    # out_dir_meta_meta='../experiments/'+experiment_name;
+    # util.mkdir(out_dir_meta_meta);
+    # out_script='../scripts/train_'+experiment_name+'_mix';
+    # num_scripts=2;
     
 
-    util.mkdir(out_dir_meta_meta);
-    folds_range=[6];
-    epoch_starts=range(100,600,100);
+    # util.mkdir(out_dir_meta_meta);
+    # folds_range=[6];
+    # epoch_starts=range(100,600,100);
     startingActivation=0.05;
     fixThresh=0.05;
     activationThreshMax=0.5;
     # schemes=['ncl','mixcl']
-    # ,'mix'];
-    schemes=['mix'];
+    # # ,'mix'];
+    # # schemes=['mix'];
     path_to_th='train_khorrami_withBlur.th';
 
-    dir_files='../data/ck_96/train_test_files';
+    # dir_files='../data/ck_96/train_test_files';
+
+
+    dir_files='../data/tfd/train_test_files';
+    dir_exp_old='../experiments/noBlur_meanFirst_pixel_augment/noBlur_meanFirst_7out';
+    folds_range=[4];
+    # epoch_starts=range(500,0,-100);
+    # schemes=['ncl','mixcl']
+
+    epoch_starts=range(500,0,-100);
+    schemes=['mix']
+    model_file='../models/base_khorrami_model_7.dat'
+    experiment_name='tfd_meanBlur_fixThresh_100_inc';
+    out_dir_meta_meta='../experiments/'+experiment_name;
+    util.mkdir(out_dir_meta_meta);
+    out_script='../scripts/train_'+experiment_name+'_mix';
+    num_scripts=2;
+
     
     # batchSizeTest=128;
     batchSize=128;
@@ -634,7 +651,7 @@ def writeScriptSchemesFixThresh():
                     else:
                         activationThreshMax=fixThresh*math.floor(1000/epoch_start);
                     print activationThreshMax
-                    command=writeBlurScript(path_to_th,out_dir_meta_curr,dir_files,fold_num,
+                    command=writeBlurScript(path_to_th,out_dir_meta_curr,dir_files,fold_num,model_file=model_file,
                                             batchSize=batchSize,
                                             scheme=scheme,
                                             ratioBlur=ratioBlur,
@@ -660,6 +677,8 @@ def writeScriptSchemesFixThresh():
                 commands.append(command);
 
     len(commands)
+    print commands[0];
+    print commands[-1];
     commands=np.array(commands);
     commands_split=np.array_split(commands,num_scripts);
     for idx_commands,commands in enumerate(commands_split):
@@ -1021,8 +1040,31 @@ def writeScriptTFDTestsDiffSchemes():
 
 
 def main():
+    writeScriptSchemesFixThresh()
+    return
+    num_folds=5;
+    data_dir='../data/tfd/train_test_files';
+    train_pre='train_';
+    test_pre='test_';
+    train_lines=[];
+    test_lines=[];
+    for num_fold in range(num_folds):
+        train_file_curr=os.path.join(data_dir,train_pre+str(num_fold)+'.txt');
+        test_file_curr=os.path.join(data_dir,test_pre+str(num_fold)+'.txt');
+        train_lines.extend(util.readLinesFromFile(train_file_curr));
+        test_lines.extend(util.readLinesFromFile(test_file_curr));
 
-    writeScriptTFDTestsDiffSchemes()
+    print len(train_lines),len(test_lines);
+    train_lines=list(set(train_lines));
+    test_lines=list(set(test_lines));
+    print len(train_lines),len(test_lines);
+    train_lines=np.array(train_lines);
+    test_lines=np.array(test_lines);
+    bin_overlap=np.in1d(test_lines,train_lines);
+    print bin_overlap.shape,np.sum(bin_overlap); 
+
+
+    # writeScriptTFDTestsDiffSchemes()
 
     # writeScriptSchemesAutoThresh()
     

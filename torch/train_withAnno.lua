@@ -1,6 +1,6 @@
 require 'image'
 npy4th = require 'npy4th'
-require 'data_face';
+require 'data_face_meanFirst';
 require 'cunn'
 require 'cudnn'
 require 'nn';
@@ -9,7 +9,7 @@ require 'torchx';
 require 'gnuplot';
 dump=require 'dump';
 visualize=require 'visualize';
-
+utils = require 'misc.utils'
 
 function getOptimStateTotal(params,parameters,logger)
     local optimStateTotal={}
@@ -21,8 +21,7 @@ function getOptimStateTotal(params,parameters,logger)
         end
 
         local learningRate_curr=params.learningRate;
-
-        if params.noBias and #parameters[layer_num]:size()==1 then
+        if #parameters[layer_num]:size()==1 then
             learningRate_curr=0;
         end
         
@@ -44,14 +43,27 @@ function getOptimStateTotal(params,parameters,logger)
     return optimStateTotal;
 end
 
-function doTheUpdate(td,net,criterion,parameters,gradParameters,optimMethod,optimStateTotal)
+function doTheUpdate(td,net,criterion,parameters,gradParameters,optimMethod,optimStateTotal,activationThresh,params)
     
-    td:getTrainingData();
-    local batch_inputs=td.training_set.data:cuda();
-    -- print (torch.min(batch_inputs[1]),torch.max(batch_inputs[1]));
-    -- print (torch.min(batch_inputs[2]),torch.max(batch_inputs[2]));
-    local batch_targets=td.training_set.label:cuda();
-    -- print (torch.min(batch_targets),torch.max(batch_targets));
+    local batch_inputs;
+    local batch_targets;
+    
+
+    if params.incrementDifficultyAfter>=0 then
+        -- assert (net_gb);
+        -- print ('params.incrementDifficultyAfter,activationThresh',params.scheme,params.incrementDifficultyAfter,activationThresh);
+        -- local out_file_pre='../scratch/look_at_im/im';
+        -- paths.mkdir('../scratch/look_at_im');
+        td:buildBlurryBatch(params.layer_to_viz,activationThresh,params.scheme)
+        -- ,out_file_pre)
+        batch_inputs=td.training_set.data;
+        batch_targets=td.training_set.label;
+    else
+        td:getTrainingData();
+        batch_inputs=td.training_set.data:cuda();
+        batch_targets=td.training_set.label:cuda();
+    end
+    
     
     net:zeroGradParameters();
     local outputs=net:forward(batch_inputs);
@@ -87,23 +99,24 @@ function test(params)
     
     local out_file_loss_val=paths.concat(out_dir_images,'loss_final_val.npy');
     local out_file_loss_val_ind=paths.concat(out_dir_images,'loss_final_val_ind.npy');
-    
+    local out_file_pred=paths.concat(out_dir_images,'1_pred_labels.npy');
+    local out_file_gt=paths.concat(out_dir_images,'1_gt_labels.npy');
     local out_file_log=paths.concat(out_dir_images,'log_test.txt');
     local logger=torch.DiskFile(out_file_log,'w');
 
     logger:writeString(dump.tostring(params)..'\n');
-    -- print (params);
+    print (params);
 
     cutorch.setDevice(params.gpu);
 
 
     logger:writeString(dump.tostring('loading network')..'\n');
-    -- print ('loading network');
+    print ('loading network');
 
     local net=torch.load(params.modelTest);
 
     logger:writeString(dump.tostring('done loading network')..'\n');
-    -- print ('done loading network');
+    print ('done loading network');
     -- logger:writeString(dump.tostring(net)..'\n');
     -- print (net);
 
@@ -112,15 +125,29 @@ function test(params)
     net = net:cuda();
     net:evaluate();
 
+    local net_gb= net:clone();
+    net_gb:replace(utils.guidedbackprop);
+    net_gb = net_gb:cuda();
+    net_gb:evaluate();
+
     logger:writeString(dump.tostring('done')..'\n');
-    -- print ('done');
+    print ('done');
 
     local data_params={file_path=params.val_data_path,
                     batch_size=params.batchSizeTest,
                     mean_file=params.mean_im_path,
                     std_file=params.std_im_path,
+                    activation_upper=0,
                     augmentation=false,
-                    limit=params.limit};
+                    limit=params.limit,
+                    ratio_blur=0.0,
+                    conv_size=params.conv_size,
+                    net=net:clone(),
+                    net_gb=net_gb:clone(),
+                    optimize=params.optimize
+                    };
+
+
     -- print (data_params);
     local vd=data_face(data_params);
     -- local criterion_weights;
@@ -135,10 +162,15 @@ function test(params)
                                        -- reset matrix
     local batch_targets_all=nil;
     local outputs_all=nil;
+    local preds_all=nil;
     local val_losses={};
     local accuracy={};
     local val_losses_iter={};
     for i=1,params.iterationsTest do
+        -- vd:getTrainingData();
+        local out_file_pre=paths.concat(out_dir_images,i..'_');
+        -- vd:buildBlurryBatch(params.layer_to_viz,0.0,'ncl',out_file_pre,true);
+            -- ,true)
         vd:getTrainingData();
         vd.training_set.data=vd.training_set.data:cuda();
         vd.training_set.label=vd.training_set.label:cuda();
@@ -180,6 +212,12 @@ function test(params)
         else
             batch_targets_all = torch.cat(batch_targets_all,batch_targets,1);
         end
+
+        if not preds_all then
+            preds_all = indices:clone();
+        else
+            preds_all = torch.cat(preds_all,indices,1);
+        end
         
         -- conf:batchAdd( outputs,batch_targets);
         -- local s=tostring(conf)
@@ -193,14 +231,20 @@ function test(params)
     assert (outputs_all:size(1)>=#vd.lines_face)
     outputs_all=outputs_all[{{1,#vd.lines_face},{}}]
     batch_targets_all=batch_targets_all[{{1,#vd.lines_face}}];
+    preds_all=preds_all[{{1,#vd.lines_face}}];
+
     -- print (outputs_all:size())
     -- print (batch_targets_all:size());
-    local conf = optim.ConfusionMatrix( {'neutral', 'anger','disgust', 'fear', 'happy', 'sadness', 'surprise'} )
+
+    local conf = optim.ConfusionMatrix( {'neutral', 'anger','contempt','disgust', 'fear', 'happy', 'sadness', 'surprise'} )
     conf:zero()    
     conf:batchAdd( outputs_all, batch_targets_all )         -- accumulate errors
     print (conf);
     local s=tostring(conf)
     logger:writeString(s..'\n');       
+    npy4th.savenpy(out_file_pred, preds_all)
+    npy4th.savenpy(out_file_gt, batch_targets_all)
+
 end
 
 
@@ -223,7 +267,7 @@ function testGlobal()
         local std_im_path=std_path_pre[1]..fold_num..std_path_pre[2];
 
         local data_params={file_path=val_data_path,
-                    batch_size=batch_sizes[fold_num+1],
+                    batch_size=128,
                     mean_file=mean_im_path,
                     std_file=std_im_path,
                     augmentation=false,
@@ -256,8 +300,11 @@ function main(params)
     paths.mkdir(out_dir);
     local out_dir_intermediate=paths.concat(out_dir,'intermediate');
     local out_dir_final=paths.concat(out_dir,'final');
+    local out_dir_images_blur=paths.concat(out_dir,'blur_im');
     paths.mkdir(out_dir_intermediate);
     paths.mkdir(out_dir_final);
+    paths.mkdir(out_dir_images_blur);
+    
     
     local out_file_net=paths.concat(out_dir_final,'model_all_final.dat');
     local out_file_loss=paths.concat(out_dir_final,'loss_final.npy');
@@ -285,9 +332,18 @@ function main(params)
     print ('done loading network');
     print (net);
 
+
     logger:writeString(dump.tostring('making cuda')..'\n');
     print ('making cuda');
     net = net:cuda();
+    logger:writeString(dump.tostring('done')..'\n');
+    print ('done');
+
+    logger:writeString(dump.tostring('making net_gb')..'\n');
+    print ('making net_gb');
+    local net_gb= net:clone();
+    net_gb:replace(utils.guidedbackprop);
+    net_gb = net_gb:cuda();
     logger:writeString(dump.tostring('done')..'\n');
     print ('done');
 
@@ -303,12 +359,51 @@ function main(params)
     logger:writeString(dump.tostring(optimState)..'\n');
     print (optimState)
 
+    local activationThresh=params.startingActivation;
+    local activationThresh_increment=0;
+    local activation_upper=0;
+    if params.incrementDifficultyAfter>=0 then
+        if params.fixThresh>0 then
+            activationThresh_increment=params.fixThresh;
+            -- print (activationThresh_increment);
+        else
+        
+            local num_inc;
+            if params.iterations%params.incrementDifficultyAfter==0 then
+                num_inc=(params.iterations/params.incrementDifficultyAfter)-1;
+            else
+                num_inc=math.floor(params.iterations/params.incrementDifficultyAfter);
+            end
+            -- print (num_inc);
+            if num_inc~=0 then
+                activationThresh_increment = (params.activationThreshMax-activationThresh)/num_inc;
+            end
+        end 
+        -- print (activationThresh_increment)
+        if activationThresh_increment==0 then
+            activation_upper=torch.range(0,params.activationThreshMax,params.activationThreshMax);
+        else
+            activation_upper=torch.range(0,params.activationThreshMax,activationThresh_increment);
+        end
+        
+        print ('num_inc,activationThresh_increment',num_inc,activationThresh_increment);    
+    end
+
+    
     local data_params={file_path=data_path,
 					batch_size=params.batchSize,
 					mean_file=params.mean_im_path,
 					std_file=params.std_im_path,
 					augmentation=params.augmentation,
-					limit=params.limit};
+					limit=params.limit,
+                    ratio_blur=params.ratioBlur,
+                    activation_upper=activation_upper,
+                    conv_size=params.conv_size,
+                    net=net:clone(),
+                    net_gb=net_gb:clone(),
+                    optimize=params.optimize,
+                    twoClass=params.twoClass
+                    };
 
 	local td=data_face(data_params);
 
@@ -318,7 +413,8 @@ function main(params)
                     mean_file=params.mean_im_path,
                     std_file=params.std_im_path,
                     augmentation=false,
-                    limit=params.limit};
+                    limit=params.limit,
+                    twoClass=params.twoClass};
     	vd=data_face(data_params);
 	end
 
@@ -334,14 +430,19 @@ function main(params)
 
 
     local criterion;
-    if params.weights_file then
-        local criterion_weights=npy4th.loadnpy(params.weights_file);
-        criterion=nn.CrossEntropyCriterion(criterion_weights):cuda()
+    if params.twoClass then
+    -- if params.weights_file then
+    --     local criterion_weights=npy4th.loadnpy(params.weights_file);
+    --     criterion=nn.CrossEntropyCriterion(criterion_weights):cuda()
+    -- else
+        criterion=nn.SoftMarginCriterion():cuda();
     else
         criterion=nn.CrossEntropyCriterion():cuda()
     end
     
     -- local criterion = nn.ClassNLLCriterion(criterion_weights):cuda();
+
+
     local losses = {};
     local losses_iter = {};
 
@@ -349,10 +450,14 @@ function main(params)
     local val_losses_iter = {};
 
 
-    
+    local blur_num=0;
     for i=1,params.iterations do
 
-        local minibatch_loss = doTheUpdate(td,net,criterion,parameters,gradParameters,optimMethod,optimStateTotal)
+        -- local minibatch_loss = doTheUpdate(td,net,criterion,parameters,gradParameters,optimMethod,optimStateTotal)
+        -- print (activationThresh);    
+        local time_update=os.clock();    
+        local minibatch_loss = doTheUpdate(td,net,criterion,parameters,gradParameters,optimMethod,optimStateTotal,activationThresh,params)
+        time_update=os.clock()-time_update;
         if minibatch_loss>3 then
             minibatch_loss=3;
         end
@@ -361,7 +466,7 @@ function main(params)
         losses_iter[#losses_iter +1] = i;
 
         if i%params.dispAfter==0 then
-        	local disp_str=string.format("lr: %6s, minibatches processed: %6s, loss = %6.6f", optimState.learningRate,i, losses[#losses])
+        	local disp_str=string.format("lr: %6s, at: %6.6f, time: %6.6f, minibatches processed: %6s, loss = %6.6f", optimState.learningRate,activationThresh,time_update,i, losses[#losses])
             logger:writeString(dump.tostring(disp_str)..'\n');
             print (disp_str);
 
@@ -388,23 +493,45 @@ function main(params)
 		    net:zeroGradParameters();
 		    -- local outputs=net:forward(batch_inputs);
 		    -- local loss = criterion:forward(outputs,batch_targets);
-      --       if loss>3 then
-      --           loss=3;
-      --       end
+            -- if loss>3 then
+            --   loss=3;
+            -- end
 
             local outputs=net:forward(batch_inputs);
-            local maxs, indices = torch.max(outputs, 2);
-            indices=indices:type(batch_targets:type());
+            local indices;
+            if params.twoClass then
+                -- print (outputs:type(),outputs:size());
+                -- print (outputs:size(),batch_targets:size())
+                -- print (torch.min(outputs),torch.max(outputs))
+                -- print (torch.min(batch_targets),torch.max(batch_targets))
+                local outputs_d=outputs:double();
+                indices=torch.zeros(outputs:size());
+                indices[outputs_d:gt(0)]=1;
+                indices[outputs_d:le(0)]=-1;
+                -- print (indices:type(),indices:size());
+                -- for idx_curr=1,outputs:size(1) do
+                --     if outputs[idx_curr][1]>0 then
+                --         indices[idx_curr]=1;
+                --     else
+                --         indices[idx_curr]=-1;
+                --     end
+                -- end
+            else
+                local maxs;
+                maxs, indices = torch.max(outputs, 2);
+            end
+
             indices=indices:view(batch_targets:size());
+            indices=indices:type(batch_targets:type());
             local loss = torch.sum(batch_targets:eq(indices))/batch_targets:nElement();
             
             val_losses[#val_losses+1]=loss;
             val_losses_iter[#val_losses_iter+1]=i;
 
+            net:training();
             disp_str=string.format("minibatches processed: %6s, val loss = %6.6f", i, val_losses[#val_losses])
             logger:writeString(dump.tostring(disp_str)..'\n');
             print(disp_str)
-            net:training();
         end
 
         -- check if model needs to be saved. save it.
@@ -425,7 +552,36 @@ function main(params)
         if i%params.dispPlotAfter==0 then
             visualize:plotLossFigure(losses,losses_iter,val_losses,val_losses_iter,out_file_loss_plot);
         end
+
+        if params.incrementDifficultyAfter>0 and i%params.incrementDifficultyAfter==0 then
+            -- local net_gb= net:clone();
+            -- net_gb:replace(utils.guidedbackprop);
+            -- net_gb = net_gb:cuda();
+            net:clearState();
+            td.net=net:clone():cuda();
+            td.net_gb=net:clone();
+            td.net_gb:replace(utils.guidedbackprop);
+            td.net_gb = td.net_gb:cuda();
+
+            activationThresh=activationThresh+activationThresh_increment;
+        end
+
+        -- if params.saveBlurAfter and i%params.saveBlurAfter==0 then
+        --     blur_num=blur_num+1;
+        --     local out_dir_diff;
+        --     if params.overwrite then
+        --         out_dir_diff=paths.concat(out_dir_images_blur,1);
+        --     else
+        --         out_dir_diff=paths.concat(out_dir_images_blur,blur_num);
+        --     end
+        --     paths.mkdir(out_dir_diff);
+        --     td.out_dir_diff=out_dir_diff;
+        --     td:saveDifficultImages(net,net_gb,params.layer_to_viz,params.activationThresh,params.conv_size,logger);
+        --     net:training();
+        -- end
+
         -- break;
+        collectgarbage();
 	end
 
     -- save final model
@@ -450,20 +606,34 @@ cmd:text('Train Face network')
 cmd:text()
 cmd:text('Options')
 
-local epoch_size=18;
--- 56;
+local epoch_size=10;
+local scheme = 'ncl';
+local temp ='../experiments/khorrami_withBlur_test/fix_'..scheme;
 
-cmd:option('-model','../models/base_khorrami_model_7.dat');
+
+cmd:option('-model','../models/base_khorrami_model_8.dat');
 cmd:option('-mean_im_path','../data/ck_96/train_test_files/train_0_mean.png');
 cmd:option('-std_im_path','../data/ck_96/train_test_files/train_0_std.png');
 
 cmd:option('-limit',-1,'num of training data to read');
-cmd:option('-iterations',2000,'num of iterations to run');
-cmd:option('-saveAfter',500,'num of iterations after which to save model');
-cmd:option('-batchSize',64,'batch size');
-cmd:option('-testAfter',2*epoch_size,'num iterations after which to get validation loss');
+cmd:option('-iterations',100*epoch_size,'num of iterations to run');
+
+cmd:option('-ratioBlur',1);
+cmd:option('-startingActivation',0);
+cmd:option('-fixThresh',-1);
+cmd:option('-incrementDifficultyAfter',0);
+cmd:option('-activationThreshMax',0.5);
+cmd:option('-scheme',scheme);
+cmd:option('-conv_size',5);
+cmd:option('-layer_to_viz',8);
+cmd:option('-optimize',true);
+-- cmd:option('-overwrite',true);
+
+cmd:option('-saveAfter',10*epoch_size,'num of iterations after which to save model');
+cmd:option('-batchSize',128,'batch size');
+cmd:option('-testAfter',10*epoch_size,'num iterations after which to get validation loss');
 cmd:option('-dispAfter',1,'num iterations after which to display training loss');
-cmd:option('-dispPlotAfter',2*epoch_size,'num iterations after which to display training loss');
+cmd:option('-dispPlotAfter',10*epoch_size,'num iterations after which to plot loss curves');
 
 cmd:option('-val_data_path','../data/ck_96/train_test_files/test_0.txt')
 cmd:option('-data_path','../data/ck_96/train_test_files/train_0.txt')
@@ -476,17 +646,15 @@ cmd:option('weightDecay', 1e-5)
 cmd:option('momentum', 0.9)
 
 cmd:option('augmentation' , true);
-cmd:option('-noBias' , false);
 
 cmd:option('-gpu',1,'gpu to run the training on');
+cmd:option('-outDir',temp);
+cmd:option('-modelTest',paths.concat(temp,'final/model_all_final.dat'));
 
-cmd:option('-outDir','../scratch/temp');
-cmd:option('-modelTest','../experiments/khorrami_basic_tfd/0/intermediate/model_all_2200.dat');
-    -- '/home/SSD3/maheen-data/expression_project/scratch/train_aug_fix/0/final/model_all_final.dat');
-
+cmd:option('-twoClass',false);
 
 params = cmd:parse(arg)
-main(params);    
+-- main(params);    
 
 -- cmd:option('-iterations',1,'num of iterations to run');
 -- cmd:option('-batchSize',132,'batch size');

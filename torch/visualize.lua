@@ -25,7 +25,7 @@ do
 
     end
 
-        function Visualize:drawKeyPoints(im,keypoints,scale,colors,pointSize)
+    function Visualize:drawKeyPoints(im,keypoints,scale,colors,pointSize)
         assert (#keypoints:size()==2);
         assert (keypoints:size(1)==2);
         assert (im:size(1)==3);

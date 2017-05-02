@@ -424,7 +424,7 @@ cmd:option('-std_im_path','../data/tfd/train_test_files/train_0_std.png');
 cmd:option('-val_data_path','../data/tfd/train_test_files/test_0.txt')
 
 
-cmd:option('-limit',132,'num of training data to read');
+cmd:option('-limit',-1,'num of training data to read');
 
 cmd:option('-iterationsTest',1,'num of iterations to run');
 cmd:option('-batchSizeTest',132,'batch size');
