@@ -7,6 +7,9 @@ from PIL import Image
 import scipy.misc;
 import caffe
 import re;
+import subprocess;
+import time;
+import multiprocessing;
 
 def testVOC(net,in_file,out_file):
 
@@ -45,7 +48,79 @@ def getNet(deploy_path,model_path,gpu_num=0):
     return net;
     
 
+def saveFrames((in_file,out_dir_curr,num_secs)):
+    print out_dir_curr
+    util.mkdir(out_dir_curr);
+    vid_length=util.getVideoLength(in_file);
+    # vid_length=int(vid_length);
+    vid_points=np.arange(num_secs,vid_length,num_secs)
+
+    for idx_vid_point,vid_point in enumerate(vid_points):
+        out_file=os.path.join(out_dir_curr,str(idx_vid_point)+'.jpg');
+        command=[];
+        command.extend(['ffmpeg','-y','-hide_banner','-loglevel','panic']);
+        command.extend(['-accurate_seek', '-ss', str(vid_point)])
+        command.extend(['-i',util.escapeString(in_file)]);
+        command.extend(['-frames:v','1',out_file]);
+        command=' '.join(command);
+        os.system(command)
+        # , shell=True)
+        # -frames:v 1 period_down_$i.bmp
+
+        # command.extend(['-i',in_file]);
+        # command.extend(['-filter:v','fps=fps=1/'+str(num_secs)]);
+        # command.append(os.path.join(out_dir_curr,'%0d.jpg'));
+        # command=' '.join(command);
+        # print command;
+        
+    # 
+    visualize.writeHTMLForFolder(out_dir_curr);
+
+
+def extractFramesMultiProc():
+    in_dir='../../../Dropbox/horse_videos/Experimental pain';
+    out_dir='../data/karina_vids/data';
+    util.makedirs(out_dir);
+
+    dirs_videos=[os.path.join(in_dir,dir_a,dir_b) for dir_a in ['Observer present','Observer not present'] for dir_b in ['Pain','No pain']]; 
+    files_all=[];
+    for dir_curr in dirs_videos:
+        files_all=files_all+util.getFilesInFolder(dir_curr,'.mts');
+
+    just_names=[os.path.split(file_curr)[1] for file_curr in files_all];
+    print len(just_names),len(set(just_names));
+    print just_names[0];
+    num_secs=10;
+
+    args=[];
+    for in_file in files_all:
+        just_name=os.path.split(in_file)[1];
+        out_dir_curr=os.path.join(out_dir,just_name[1:just_name.rindex('.')]);
+        args.append((in_file,out_dir_curr,num_secs));
+
+    # args=args[10:];
+    p=multiprocessing.Pool(multiprocessing.cpu_count());
+    t=time.time();
+    p.map(saveFrames,args);
+    print (time.time()-t);
+
+
 def main():
+    pass;
+
+    
+
+
+    # for arg in args:
+    #     t=time.time();
+    #     saveFrames(arg);
+    #     print (time.time()-t);
+    #     break;
+
+
+
+
+    
 
     # string_to_match='data-filename="';
     # file_name='untitled.html';
@@ -66,7 +141,7 @@ def main():
     #     print file_curr+' ',
     #     # break;
     
-    # return
+    return
     in_dir='../scratch/2_3b';
     out_dir=os.path.join(in_dir+'_pred');
     util.mkdir(out_dir);

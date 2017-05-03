@@ -3,6 +3,13 @@ import scipy
 import subprocess;
 import os;
 
+def getVideoLength(filename):
+  result = subprocess.Popen(["ffprobe", filename,'-show_format'],
+    stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
+  x_list=[x for x in result.stdout.readlines() if "duration" in x]
+  num=x_list[0].strip('\n');
+  num=float(num[num.index('=')+1:])
+  return num;
 
 def getFilesInFolder(folder,ext):
     list_files=[os.path.join(folder,file_curr) for file_curr in os.listdir(folder) if file_curr.endswith(ext)];
@@ -111,7 +118,7 @@ def getIOU(box_1,box_2):
     return iou
 
 def escapeString(string):
-    special_chars='!"&\'()*,:;<=>?@[]`{|}';
+    special_chars=' !"&\'()*,:;<=>?@[]`{|}';
     for special_char in special_chars:
         string=string.replace(special_char,'\\'+special_char);
     return string
