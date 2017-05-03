@@ -10,36 +10,55 @@ import re;
 import subprocess;
 import time;
 import multiprocessing;
-
-def testVOC(net,in_file,out_file):
+import math;
+def testVOC(net,in_dir,out_dir,batchSize=15,small_side=500):
 
     # load image, switch to BGR, subtract mean, and make dims C x H x W for Caffe
-    im = Image.open(in_file)
-    in_ = np.array(im, dtype=np.float32)
-    in_ = in_[:,:,::-1]
-    in_ -= np.array((104.00698793,116.66876762,122.67891434))
-    in_ = in_.transpose((2,0,1))
-    print in_.shape
 
-    # load net
-    # net = caffe.Net(deploy_path,model_path, caffe.TEST)
-    # shape for input (data blob is N x C x H x W), set data
-    net.blobs['data'].reshape(1, *in_.shape)
-    net.blobs['data'].data[...] = in_
-    # run net and take argmax for prediction
-    net.forward()
-    out = net.blobs['score'].data[0].argmax(axis=0)
+    in_files_all=util.getFilesInFolder(in_dir,'.jpg')
+    in_files_split=np.array(in_files_all);
+    in_files_split=np.array_split(in_files_split,len(in_files_all)/batchSize+1);
+    print 'num_batches',len(in_files_split)
+    
+    for num_batch,in_files in enumerate(in_files_split):
+        print num_batch,len(in_files_split),len(in_files)
 
-    # out = out.argmax(axis=1) # Get the labels at each pixel
-    print out.shape
-    out[out==13]=255;
-    out[out<255]=0;
-    # out = out.transpose(1, 2, 0) # Reshape the output into an image
-    # out = np.tile(out, (1,3))
-    # print np.min(out),np.max(out);
-    # out=np.array((out-np.min(out))/np.max(out)*255,dtype=np.uint8);
-    scipy.misc.imsave(out_file,out)
-    print out_file;
+        num_im=len(in_files);
+        out_files=[os.path.join(out_dir,os.path.split(file_curr)[1]) for file_curr in in_files]
+        # in_=np.array(Image.open(in_files[0]),dtype=np.float32)
+        # new_size=(small_side,int(in_.shape[1]*(float(small_side)/in_.shape[0])))
+        # print new_size,in_.shape
+        # in_=scipy.misc.imresize(in_,new_size);
+        # in_.shape[1]
+        new_size=(small_side,small_side);
+
+        in_arr=np.zeros((num_im,3,small_side,small_side),dtype=np.float32)
+        
+        for num_file,in_file in enumerate(in_files):
+            in_ = scipy.misc.imread(in_file);
+            in_=scipy.misc.imresize(in_,new_size);
+            in_ = np.array(in_, dtype=np.float32)
+            
+            in_ = in_[:,:,::-1]
+            in_ -= np.array((104.00698793,116.66876762,122.67891434))
+            in_ = in_.transpose((2,0,1))
+            in_arr[num_file]=in_;
+
+        net.blobs['data'].reshape(*in_arr.shape)
+        net.blobs['data'].data[...]=in_arr
+        
+        net.forward()
+        out_arr = net.blobs['score'].data
+
+        for out_num in range(out_arr.shape[0]):
+            out=out_arr[out_num].argmax(axis=0)
+            out[out==13]=255;
+            out[out<255]=0;
+            out_file=out_files[out_num];
+            scipy.misc.imsave(out_file,out)
+
+    visualize.writeHTMLForFolder(out_dir);
+    
 
 def getNet(deploy_path,model_path,gpu_num=0):
     caffe.set_mode_gpu()
@@ -79,7 +98,7 @@ def saveFrames((in_file,out_dir_curr,num_secs)):
 
 def extractFramesMultiProc():
     in_dir='../../../Dropbox/horse_videos/Experimental pain';
-    out_dir='../data/karina_vids/data';
+    out_dir='../data/karina_vids/data_unprocessed';
     util.makedirs(out_dir);
 
     dirs_videos=[os.path.join(in_dir,dir_a,dir_b) for dir_a in ['Observer present','Observer not present'] for dir_b in ['Pain','No pain']]; 
@@ -105,77 +124,25 @@ def extractFramesMultiProc():
     print (time.time()-t);
 
 
-def main():
-    pass;
-
-    
-
-
-    # for arg in args:
-    #     t=time.time();
-    #     saveFrames(arg);
-    #     print (time.time()-t);
-    #     break;
-
-
-
-
-    
-
-    # string_to_match='data-filename="';
-    # file_name='untitled.html';
-    # with open(file_name,'rb') as f:
-    #     lines=f.read();
-
-    # idx_match=[m.start() for m in re.finditer(string_to_match, lines)];
-    # idx_match.append(len(lines));
-    # for idx_idx_curr,idx_match_curr in enumerate(idx_match[:-1]):
-    #     idx_start=idx_match_curr+len(string_to_match);
-    #     idx_end=lines[idx_start:idx_match[idx_idx_curr+1]].find('"');
-    #     idx_end=idx_start+idx_end;
-    #     file_curr=lines[idx_start:idx_end];
-    #     file_curr='Dropbox/'+file_curr;
-    #     # print file_curr;
-    #     file_curr=util.escapeString(file_curr);
-    #     file_curr=file_curr.replace(' ','\ ');
-    #     print file_curr+' ',
-    #     # break;
-    
-    return
-    in_dir='../scratch/2_3b';
-    out_dir=os.path.join(in_dir+'_pred');
-    util.mkdir(out_dir);
-    im_name='2_3b_3.jpg';
-    
-    out_file=os.path.join(out_dir,im_name);
-    in_file=os.path.join(in_dir,im_name);
-
+def saveMasks():
     deploy_path='../../fcn.berkeleyvision.org/voc-fcn8s/deploy.prototxt'
     model_path='../../fcn.berkeleyvision.org/voc-fcn8s/fcn8s-heavy-pascal.caffemodel'
     net=getNet(deploy_path,model_path);
-
-    testVOC(deploy_path,model_path,in_file,out_file);
     
+    in_dir_meta='../data/karina_vids/data_unprocessed';
+    in_dirs=[os.path.join(in_dir_meta,dir_curr) for dir_curr in os.listdir(in_dir_meta) if os.path.isdir(os.path.join(in_dir_meta,dir_curr))]
+    # print in_dirs;
+    # print len(in_dirs);
+    out_dirs=[dir_curr+'_mask' for dir_curr in in_dirs]
 
+    for idx_dir,(in_dir,out_dir) in enumerate(zip(in_dirs,out_dirs)):
+        print idx_dir,in_dir,out_dir
+        util.mkdir(out_dir);
+        testVOC(net,in_dir,out_dir)
 
+def main():
 
-
-    return
-    video_path='../scratch/#2_3b.mts';
-    video_name=os.path.split(video_path)[1];
-    video_name=video_name[video_name.index('#')+1:video_name.rindex('.')];
-    out_dir=os.path.join('../scratch',video_name);
-    util.mkdir(out_dir);
-
-    command=[];
-    command.extend(['ffmpeg','-i']);
-    command.append(video_path);
-    command.extend(['-filter:v','fps=fps=1/60']);
-    command.append(os.path.join(out_dir,video_name+'_%0d.jpg'));
-    command=' '.join(command);
-    print command;
-    os.system(command);
-    # ffmpeg -i input.mp4 -filter:v fps=fps=1/60 ffmpeg_%0d.bmp
+    pass;
 
 
 if __name__=='__main__':
