@@ -32,13 +32,19 @@ def writeBlurScript(\
     modelTest=None,
     resume_dir_meta=None,
     twoClass=False,
-    val_data_path=None
+    val_data_path=None,
+    mean_im_path=None,
+    std_im_path=None,
+    onlyLast=False,
+    lower=False
     ):
     data_path=os.path.join(dir_files,'train_'+str(fold_num)+'.txt');
     if val_data_path is None:
         val_data_path=os.path.join(dir_files,'test_'+str(fold_num)+'.txt');
-    mean_im_path=os.path.join(dir_files,'train_'+str(fold_num)+'_mean.png');
-    std_im_path=os.path.join(dir_files,'train_'+str(fold_num)+'_std.png');
+    if mean_im_path is None:
+        mean_im_path=os.path.join(dir_files,'train_'+str(fold_num)+'_mean.png');
+    if std_im_path is None:
+        std_im_path=os.path.join(dir_files,'train_'+str(fold_num)+'_std.png');
 
     epoch_size=len(util.readLinesFromFile(data_path))/batchSize;
     totalSizeTest=len(util.readLinesFromFile(val_data_path));
@@ -89,6 +95,12 @@ def writeBlurScript(\
 
     if twoClass:
         command = command+['-twoClass'];
+
+    if onlyLast:
+        command = command+['-onlyLast'];
+
+    if lower:
+        command = command+['-lower'];
 
     command = [str(c_curr) for c_curr in command];
     command=' '.join(command);

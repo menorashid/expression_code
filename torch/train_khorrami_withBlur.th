@@ -24,6 +24,13 @@ function getOptimStateTotal(params,parameters,logger)
         if #parameters[layer_num]:size()==1 then
             learningRate_curr=0;
         end
+        if params.onlyLast and #parameters-layer_num>1 then
+            learningRate_curr=0;
+        end
+
+        if params.lower and #parameters-layer_num>1 then
+            learningRate_curr=learningRate_curr/10;
+        end
         
         local optimState_curr={learningRate=learningRate_curr,
                                 weightDecay=params.weightDecay,
@@ -144,7 +151,8 @@ function test(params)
                     conv_size=params.conv_size,
                     net=net:clone(),
                     net_gb=net_gb:clone(),
-                    optimize=params.optimize
+                    optimize=params.optimize,
+                    twoClass=params.twoClass
                     };
 
 
@@ -169,9 +177,9 @@ function test(params)
     for i=1,params.iterationsTest do
         -- vd:getTrainingData();
         local out_file_pre=paths.concat(out_dir_images,i..'_');
-        -- vd:buildBlurryBatch(params.layer_to_viz,0.0,'ncl',out_file_pre,true);
+        vd:buildBlurryBatch(params.layer_to_viz,0.0,'ncl',out_file_pre,true);
             -- ,true)
-        vd:getTrainingData();
+        -- vd:getTrainingData();
         vd.training_set.data=vd.training_set.data:cuda();
         vd.training_set.label=vd.training_set.label:cuda();
         local batch_inputs=vd.training_set.data;
@@ -180,13 +188,35 @@ function test(params)
         local outputs=net:forward(batch_inputs);
         -- local loss = criterion:forward(outputs,batch_targets);
         -- print (outputs)
-        local maxs, indices = torch.max(outputs, 2);
+        -- local maxs, indices = torch.max(outputs, 2);
+        local indices;
+        if params.twoClass then
+            -- print (outputs:type(),outputs:size());
+            -- print (outputs:size(),batch_targets:size())
+            -- print (torch.min(outputs),torch.max(outputs))
+            -- print (torch.min(batch_targets),torch.max(batch_targets))
+            local outputs_d=outputs:double();
+            indices=torch.zeros(outputs:size());
+            indices[outputs_d:gt(0)]=1;
+            indices[outputs_d:le(0)]=-1;
+            -- print (indices:type(),indices:size());
+            -- for idx_curr=1,outputs:size(1) do
+            --     if outputs[idx_curr][1]>0 then
+            --         indices[idx_curr]=1;
+            --     else
+            --         indices[idx_curr]=-1;
+            --     end
+            -- end
+        else
+            local maxs;
+            maxs, indices = torch.max(outputs, 2);
+        end
         indices=indices:type(batch_targets:type());
         indices=indices:view(batch_targets:size());
-        -- print (indices[{{1,10}}]);
-        -- print (batch_targets[{{1,10}}]);
         -- local accuracy_idx = torch.linspace(1,batch_targets:size(1),batch_targets:size(1)):long()
         -- local selected = accuracy_idx[batch_targets:eq(indices)];
+        -- print (batch_targets:size())
+        -- print (batch_targets[{{1,10}}],indices[{{1,10}}]);
         local accuracy_curr = torch.sum(batch_targets:eq(indices))/batch_targets:nElement();
         -- print (accuracy_curr);
         
@@ -237,7 +267,13 @@ function test(params)
     -- print (batch_targets_all:size());
 
     -- local conf = optim.ConfusionMatrix( {'neutral', 'anger','contempt','disgust', 'fear', 'happy', 'sadness', 'surprise'} )
-    local conf = optim.ConfusionMatrix( {'anger','disgust', 'fear', 'happy', 'sadness', 'surprise','neutral'} )
+    -- local conf = optim.ConfusionMatrix( {'anger','disgust', 'fear', 'happy', 'sadness', 'surprise','neutral'} )
+    if params.twoClass then
+        outputs_all=torch.remainder(outputs_all+1,2);
+        batch_targets_all=torch.remainder(batch_targets_all+1,2);
+    end
+    
+    local conf = optim.ConfusionMatrix( {'neutral','pain'} )
     conf:zero()    
     conf:batchAdd( outputs_all, batch_targets_all )         -- accumulate errors
     print (conf);
@@ -653,9 +689,11 @@ cmd:option('-outDir',temp);
 cmd:option('-modelTest',paths.concat(temp,'final/model_all_final.dat'));
 
 cmd:option('-twoClass',false);
+cmd:option('-onlyLast',false);
+cmd:option('-lower',false);
 
 params = cmd:parse(arg)
-main(params);    
+-- main(params);    
 
 -- cmd:option('-iterations',1,'num of iterations to run');
 -- cmd:option('-batchSize',132,'batch size');

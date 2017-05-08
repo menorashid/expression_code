@@ -882,8 +882,12 @@ def combineTFDCkFiles():
     util.writeFile(out_file,lines_all);
     
 def main(args):
+    data_dir='../data/karina_vids/data_unprocessed/test_train_images';
+    train_pre='train_';
+    num_folds=6;
 
-    combineTFDCkFiles();
+    saveCKMeanSTDImages(data_dir,train_pre,resize_size=None,num_folds=num_folds)
+    # combineTFDCkFiles();
 
     # modifyTFDClassesForCK();
     # visualizeTestData();

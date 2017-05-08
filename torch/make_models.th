@@ -88,12 +88,32 @@ function createBaseKhorramiModel(out_file,num_out)
 
 end
 
+function createFineTuneModelKhorrami(in_file,out_file,num_out)
+    local model=torch.load(in_file);
+    local model_new=nn.Sequential();
+    model_new:add(nn.Linear(300,num_out));
+    model_new=makeXavierGaussian(model_new);
+    model:remove(#model);
+    -- print (model);
+    model:add(model_new:get(#model_new));
+    print (model);
+    model:clearState();
+    torch.save(out_file,model);
+    print (out_file)
+
+end
+
 function main()
-	local num_out=1;
-	local out_file='../models/base_khorrami_model_'..num_out..'.dat'
-	createBaseKhorramiModel(out_file,num_out);
-	local model=torch.load(out_file);
-	print (model);
+    num_out=2;
+    in_file='../experiments/khorrami_ck_rerun/0/final/model_all_final.dat';
+    out_file='../models/ck_khorrami_model_forFT_'..num_out..'.dat';
+    
+    createFineTuneModelKhorrami(in_file,out_file,num_out)
+	-- local num_out=2;
+	-- local out_file='../models/base_khorrami_model_'..num_out..'.dat'
+	-- createBaseKhorramiModel(out_file,num_out);
+	-- local model=torch.load(out_file);
+	-- print (model);
 end
 
 main();

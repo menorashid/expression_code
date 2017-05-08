@@ -11,6 +11,10 @@ import subprocess;
 import time;
 import multiprocessing;
 import math;
+import cv2;
+import csv
+import random;
+import scripts_and_viz
 def testVOC(net,in_dir,out_dir,batchSize=15,small_side=500):
 
     # load image, switch to BGR, subtract mean, and make dims C x H x W for Caffe
@@ -117,7 +121,7 @@ def extractFramesMultiProc():
         out_dir_curr=os.path.join(out_dir,just_name[1:just_name.rindex('.')]);
         args.append((in_file,out_dir_curr,num_secs));
 
-    # args=args[10:];
+    # args=args[33:];
     p=multiprocessing.Pool(multiprocessing.cpu_count());
     t=time.time();
     p.map(saveFrames,args);
@@ -130,19 +134,300 @@ def saveMasks():
     net=getNet(deploy_path,model_path);
     
     in_dir_meta='../data/karina_vids/data_unprocessed';
-    in_dirs=[os.path.join(in_dir_meta,dir_curr) for dir_curr in os.listdir(in_dir_meta) if os.path.isdir(os.path.join(in_dir_meta,dir_curr))]
+    in_dirs=[os.path.join(in_dir_meta,dir_curr) for dir_curr in os.listdir(in_dir_meta) if os.path.isdir(os.path.join(in_dir_meta,dir_curr)) and not dir_curr.endswith('mask')]
+    in_dirs=in_dirs[33:];
     # print in_dirs;
-    # print len(in_dirs);
+    print len(in_dirs);
     out_dirs=[dir_curr+'_mask' for dir_curr in in_dirs]
-
+    print in_dirs[0]
+    # print 
     for idx_dir,(in_dir,out_dir) in enumerate(zip(in_dirs,out_dirs)):
         print idx_dir,in_dir,out_dir
         util.mkdir(out_dir);
         testVOC(net,in_dir,out_dir)
 
-def main():
+def getImAnnoList(row_curr,out_dir,num_secs=10):
+    # videos,lengths,
+    vid_name=row_curr[0];
+    # vids=[os.path.split(file_curr)[1] for file_curr in videos];
+    # idx_vid=vids.index(vid_name)
+    # vid_file=videos[idx_vid]
+    # length=lengths[idx_vid];
 
-    pass;
+    out_dir_curr=os.path.join(out_dir,vid_name.strip('#'));
+
+
+    if row_curr[1]=='np':
+        annos_all=util.getFilesInFolder(out_dir_curr,'.jpg');
+        annos_all=[file_curr+' -1' for file_curr in annos_all];
+    elif row_curr[1]=='p' and row_curr[2].lower()=='all':
+        annos_all=util.getFilesInFolder(out_dir_curr,'.jpg');
+        annos_all=[file_curr+' 1' for file_curr in annos_all];
+    elif row_curr[1]=='p' and row_curr[2].lower()=='none':
+        annos_all=[];
+    else:
+        # times=row_curr[3];
+        annos_all=[];
+        for time_range in row_curr[2].split(';'):
+            times=[];
+            for t in time_range.split('-'):
+                t=t.split(':');
+                t_sec=int(t[0])*60+int(t[1][:2]);
+                times.append(t_sec);
+            im_start=max(round(times[0]/float(num_secs))-1,0);
+            im_end=round(times[1]/float(num_secs));
+            print row_curr[2],times,im_start,im_end
+            for im_num in range(int(im_start),int(im_end)):
+                im_curr=os.path.join(out_dir_curr,str(im_num)+'.jpg')
+                if os.path.exists(im_curr):
+                    print im_curr;
+                    # raw_input();
+                    annos_all.append(im_curr+' 1');
+
+    return annos_all;
+
+
+def labelImages():
+    out_dir='../data/karina_vids/data_unprocessed';
+    out_file_anno=os.path.join(out_dir,'annos_all.txt');
+    excel_file='Videos_overview_06072016.csv';
+    
+    annos_all=[];
+    with open(excel_file,'rb') as f:
+        spamreader = csv.reader(f);
+        for row in spamreader:
+            if row[1].startswith('#'):
+                anno_curr=[];
+                anno_curr.append(row[1]);
+                if row[5]=='x':
+                    anno_curr.append('np');
+                elif row[6]=='x':
+                    anno_curr.append('p');
+                    anno_curr.append(row[-3]);
+                else:
+                    print row;
+                    continue;
+
+                annos_all.append(anno_curr);
+
+    im_annos_all=[];
+    print len(annos_all);
+    rows_to_keep=[];
+    for row_curr in annos_all:
+        vid_name=row_curr[0].strip('#');
+        if os.path.exists(os.path.join(out_dir,vid_name)):
+            im_anno_list=getImAnnoList(row_curr,out_dir);
+            im_annos_all.extend(im_anno_list);
+
+    print len(im_annos_all);
+    util.writeFile(out_file_anno,im_annos_all);
+    
+    # print len(rows_to_keep);
+def saveResizeImage(real_im,mask_im,out_file,border=200,size_out=(96,96)):
+    # real_im=os.path.join(dir_meta,vid_name,im_name);
+    # mask_im=os.path.join(dir_meta,vid_name+'_mask',im_name);
+    # print os.path.exists(real_im);
+    # print os.path.exists(mask_im);
+
+    im=scipy.misc.imread(real_im);
+    mask_curr=scipy.misc.imread(mask_im);
+    mask_curr=scipy.misc.imresize(mask_curr,(im.shape[0],im.shape[1]),'nearest');
+    mask_curr[mask_curr>0]=1;
+    
+    im_out,contours=cv2.findContours(np.array(mask_curr),cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE)
+    contours_sizes=[im_curr.shape[0] for im_curr in im_out];
+    max_contour=im_out[np.argmax(contours_sizes)];
+
+    contour_curr=max_contour
+    contour_curr=contour_curr[:,0,:];
+    # border=200;
+    # print contour_curr.shape
+    min_max=list(np.min(contour_curr,axis=0))+list(np.max(contour_curr,axis=0));
+    # print min_max
+
+    min_max=[max(min_max[0]-border,0),max(min_max[1]-border,0),min(min_max[2]+border,im.shape[1]),min(min_max[3]+border,im.shape[0])]
+    # print min_max;
+    im=im[min_max[1]:min_max[3],min_max[0]:min_max[2],:]
+    im = cv2.cvtColor(im[:,:,::-1], cv2.COLOR_BGR2GRAY)
+    im = scipy.misc.imresize(im,size_out);
+    # print contour_curr
+    # for pixel in contour_curr:
+    #     # print pixel
+    #     pixel=pixel[0];
+    #     im[pixel[1],pixel[0],0]=0;
+    #     im[pixel[1],pixel[0],1]=255;
+    #     im[pixel[1],pixel[0],2]=0;
+
+    scipy.misc.imsave(out_file,im);
+        # '../scratch/test.jpg',im);
+
+def makeResizeImAndFile():
+
+    anno_file='../data/karina_vids/data_unprocessed/annos_all.txt'
+    in_dir='../data/karina_vids/data_unprocessed'
+    out_dir_files=os.path.join(in_dir,'test_train_images');
+    util.mkdir(out_dir_files);
+    lines=util.readLinesFromFile(anno_file);
+    lines_new=[];
+    out_file_new=os.path.join(out_dir_files,'annos_all.txt');
+
+    for line_curr in lines:
+        anno=line_curr.split(' ')[1];
+        file_curr=line_curr.split(' ')[0];
+        dir_curr=os.path.split(file_curr)[0];
+        mask_dir_curr=dir_curr+'_mask';
+        mask_file=os.path.join(mask_dir_curr,os.path.split(file_curr)[1]);
+        out_dir_curr=dir_curr+'_rs';
+        util.mkdir(out_dir_curr);
+        out_file=os.path.join(out_dir_curr,os.path.split(file_curr)[1]);
+        # print file_curr,mask_file,out_file
+        try:
+            saveResizeImage(file_curr,mask_file,out_file);
+            lines_new.append(out_file+' '+anno);
+        except:
+            print 'ERROR',line_curr
+            continue
+
+    util.writeFile(out_file_new,lines_new);
+
+def getEqualList(train_list):
+    anno_train=np.array([int(line_curr.split(' ')[1]) for line_curr in train_list]);
+    bin_pos=anno_train[anno_train>0];
+    bin_neg=anno_train[anno_train<0];
+    pos_lines=list(train_list[bin_pos]);
+    neg_lines=list(train_list[bin_neg]);
+    random.shuffle(pos_lines);
+    random.shuffle(neg_lines);
+    num_keep=min(len(pos_lines),len(neg_lines));
+    pos_lines=pos_lines[:num_keep];
+    neg_lines=neg_lines[:num_keep];
+    train_list=pos_lines+neg_lines;
+    random.shuffle(train_list);
+    return train_list
+
+def writeTrainTestFiles():
+    in_dir='../data/karina_vids/data_unprocessed';
+    out_dir_files=os.path.join(in_dir,'test_train_images');  
+    anno_file=os.path.join(out_dir_files,'annos_all.txt');
+
+    lines_all=util.readLinesFromFile(anno_file);
+    range_horses=range(1,7)
+    for idx_fold,test_horse in enumerate(range_horses):
+        train_horse=[str(num) for num in range_horses if num!= test_horse];
+        test_horse=[str(test_horse)]
+        out_file_train=os.path.join(out_dir_files,'train_'+str(idx_fold)+'.txt');
+        out_file_test=os.path.join(out_dir_files,'test_'+str(idx_fold)+'.txt');
+        horse_num=[line_curr.split('/')[-2][0] for line_curr in lines_all];
+        anno_num=[line_curr.split(' ')[1] for line_curr in lines_all];
+        
+        idx_rows=np.array(list(range(len(lines_all))));
+        horse_num=np.array(horse_num);
+        anno_num=np.array(anno_num);
+
+        train_bin=np.in1d(np.array(horse_num),np.array(train_horse));
+        test_bin=np.in1d(np.array(horse_num),np.array(test_horse));
+        print train_bin.shape,np.sum(train_bin);
+        print test_bin.shape,np.sum(test_bin);
+
+        train_list=np.array(lines_all)[train_bin];
+        test_list=np.array(lines_all)[test_bin];
+        train_list=getEqualList(train_list);
+        print len(train_list);
+        test_list=getEqualList(test_list);
+        print len(test_list);
+        util.writeFile(out_file_train,train_list);
+        util.writeFile(out_file_test,test_list);
+
+def writeScriptForTraining():
+    path_to_th='train_khorrami_withBlur.th';
+
+    # dir_files='../data/karina_vids/data_unprocessed/test_train_images';
+    # twoClass=True;
+    # model_file='../models/base_khorrami_model_1.dat'
+    # experiment_name='horses_twoClass'
+    
+    dir_files='../data/karina_vids/train_test_files_01';
+    twoClass=False;
+    # model_file='../models/base_khorrami_model_2.dat'
+    # experiment_name='horses_twoClass_01'
+    # mean_im_path=None;
+    # onlyLast=False;
+
+    model_file='../models/ck_khorrami_model_forFT_2.dat'
+    mean_im_path='../data/ck_96/train_test_files/train_0_mean.png';
+    std_im_path='../data/ck_96/train_test_files/train_0_std.png'
+    # experiment_name='horses_twoClass_01_ft_slr'
+
+    experiment_name='horses_twoClass_01_ft_higherLast'
+    onlyLast=False
+    lower=True
+
+    num_scripts=1;
+    out_dir_meta=os.path.join('../experiments',experiment_name);
+    out_script='../scripts/train_'+experiment_name;
+    
+    util.mkdir(out_dir_meta);
+    
+    iterations=50;
+    saveAfter=10;
+    testAfter=1;
+    learningRate=0.01
+    
+    commands_all=[];
+    
+    for fold_num in range(6):
+        if mean_im_path is not None:
+            command = scripts_and_viz.writeBlurScript(path_to_th,out_dir_meta,dir_files,fold_num,model_file=model_file,twoClass=twoClass,iterations=iterations,saveAfter=saveAfter,learningRate=learningRate,testAfter=testAfter,mean_im_path=mean_im_path,std_im_path=std_im_path, onlyLast=onlyLast,lower=lower);
+        else:
+            command = scripts_and_viz.writeBlurScript(path_to_th,out_dir_meta,dir_files,fold_num,model_file=model_file,twoClass=twoClass,iterations=iterations,saveAfter=saveAfter,learningRate=learningRate,testAfter=testAfter);
+        commands_all.append(command);
+
+    commands=np.array(commands_all);
+    commands_split=np.array_split(commands,num_scripts);
+    for idx_commands,commands in enumerate(commands_split):
+        out_file_script_curr=out_script+'_'+str(idx_commands)+'.sh';
+        print idx_commands,len(commands)
+        print out_file_script_curr
+        # print commands;
+        util.writeFile(out_file_script_curr,commands);
+
+    # util.writeFile(out_file_script,commands_all);
+
+def main():
+    writeScriptForTraining()
+
+    return
+    train_test_dir='../data/karina_vids/train_test_files';
+    out_dir='../data/karina_vids/train_test_files_01';
+    util.mkdir(out_dir);
+    num_folds=6;
+    in_file_pres=['train_','test_'];
+    range_folds=range(num_folds);
+
+    for num_fold in range_folds:
+        for in_file_pre in in_file_pres:
+            in_file=os.path.join(train_test_dir,in_file_pre+str(num_fold)+'.txt');
+            out_file=os.path.join(out_dir,in_file_pre+str(num_fold)+'.txt');
+            lines=util.readLinesFromFile(in_file);
+            # lines=[line_curr.split(' ')[0]+' 0' if line_curr.split(' ')[1]=='-1' else 
+            lines_new=[];
+            for line_curr in lines:
+                line_split=line_curr.split(' ')
+                line_split[1]='0' if line_split[1]=='-1' else '1'
+                lines_new.append(' '.join(line_split));
+
+            util.writeFile(out_file,lines_new);
+                
+
+
+    
+
+
+    
+
+
+
+
 
 
 if __name__=='__main__':
