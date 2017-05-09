@@ -45,6 +45,7 @@ do
         -- MODIFIED
         self.mean_im=image.load(self.mean_file);
         self.std_im=image.load(self.std_file);
+        self.std_im[self.std_im:eq(0)]=1;
 
         self.mean_batch=self.mean_im:view(1,self.mean_im:size(1),self.mean_im:size(2),self.mean_im:size(3));
         self.mean_batch=torch.repeatTensor(self.mean_im,self.batch_size,1,1,1);
@@ -564,7 +565,7 @@ do
         -- assert (torch.min(img_face)==min_im);
         -- assert (torch.max(img_face)==(max_im-min_im))
         
-
+        -- print (torch.min(img_face),torch.max(img_face),torch.sum(img_face:ne(img_face)))
         img_face[img_face:ne(img_face)]=0;
         
         return img_face;
@@ -573,7 +574,7 @@ do
     function data:processImBatch(im_batch)
         -- MODIFIED
         im_batch=torch.cdiv((im_batch-self.mean_batch),self.std_batch);
-        
+
         if self.augmentation then
             for img_face_num=1,im_batch:size(1) do
                 im_batch[img_face_num]=self:augmentImage(im_batch[img_face_num]);
@@ -587,6 +588,9 @@ do
         -- MODIFIED
 
         img_face=torch.cdiv((img_face-self.mean_im),self.std_im);        
+        -- print (torch.min(img_face),torch.max(img_face),torch.sum(img_face:ne(img_face)))
+        -- print (torch.min(self.mean_im),torch.max(self.mean_im),torch.sum(self.mean_im:ne(self.mean_im)))
+        -- print (torch.min(self.std_im),torch.max(self.std_im),torch.sum(self.std_im:ne(self.std_im)))
         
         if img_face:size(2)~=self.input_size[1] then 
             img_face = image.scale(img_face,self.input_size[1],self.input_size[2]);

@@ -74,8 +74,14 @@ function doTheUpdate(td,net,criterion,parameters,gradParameters,optimMethod,opti
     
     net:zeroGradParameters();
     local outputs=net:forward(batch_inputs);
-    local maxs, indices = torch.max(outputs, 2);
+    -- local maxs, indices = torch.max(outputs, 2);
+    
     -- print (torch.min(indices),torch.max(indices));
+    -- print (torch.min(batch_targets),torch.max(batch_targets));
+    -- print (indices[{{1,10}}],batch_targets[{{1,10}}]);
+    -- print (torch.sum(batch_targets:double():eq(indices:double()))/batch_targets:nElement());
+    -- print (torch.min(batch_inputs),torch.max(batch_inputs));
+
     local loss = criterion:forward(outputs, batch_targets)
     local dloss = criterion:backward(outputs,batch_targets);
     -- print (dloss:size())
@@ -272,7 +278,7 @@ function test(params)
         outputs_all=torch.remainder(outputs_all+1,2);
         batch_targets_all=torch.remainder(batch_targets_all+1,2);
     end
-    
+
     local conf = optim.ConfusionMatrix( {'neutral','pain'} )
     conf:zero()    
     conf:batchAdd( outputs_all, batch_targets_all )         -- accumulate errors
@@ -693,7 +699,7 @@ cmd:option('-onlyLast',false);
 cmd:option('-lower',false);
 
 params = cmd:parse(arg)
--- main(params);    
+main(params);    
 
 -- cmd:option('-iterations',1,'num of iterations to run');
 -- cmd:option('-batchSize',132,'batch size');

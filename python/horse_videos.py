@@ -15,6 +15,10 @@ import cv2;
 import csv
 import random;
 import scripts_and_viz
+import preprocess_data
+dir_server='/home/SSD3/maheen-data/';
+click_str='http://vision1.idav.ucdavis.edu:1000/';
+
 def testVOC(net,in_dir,out_dir,batchSize=15,small_side=500):
 
     # load image, switch to BGR, subtract mean, and make dims C x H x W for Caffe
@@ -223,40 +227,26 @@ def labelImages():
     util.writeFile(out_file_anno,im_annos_all);
     
     # print len(rows_to_keep);
-def saveResizeImage(real_im,mask_im,out_file,border=200,size_out=(96,96)):
-    # real_im=os.path.join(dir_meta,vid_name,im_name);
-    # mask_im=os.path.join(dir_meta,vid_name+'_mask',im_name);
-    # print os.path.exists(real_im);
-    # print os.path.exists(mask_im);
+def saveResizeImage(real_im,mask_im,out_file,border=200,size_out=(96,96),justMask=False):
 
     im=scipy.misc.imread(real_im);
     mask_curr=scipy.misc.imread(mask_im);
     mask_curr=scipy.misc.imresize(mask_curr,(im.shape[0],im.shape[1]),'nearest');
     mask_curr[mask_curr>0]=1;
-    
     im_out,contours=cv2.findContours(np.array(mask_curr),cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE)
     contours_sizes=[im_curr.shape[0] for im_curr in im_out];
     max_contour=im_out[np.argmax(contours_sizes)];
-
     contour_curr=max_contour
     contour_curr=contour_curr[:,0,:];
-    # border=200;
-    # print contour_curr.shape
     min_max=list(np.min(contour_curr,axis=0))+list(np.max(contour_curr,axis=0));
-    # print min_max
-
     min_max=[max(min_max[0]-border,0),max(min_max[1]-border,0),min(min_max[2]+border,im.shape[1]),min(min_max[3]+border,im.shape[0])]
-    # print min_max;
-    im=im[min_max[1]:min_max[3],min_max[0]:min_max[2],:]
     im = cv2.cvtColor(im[:,:,::-1], cv2.COLOR_BGR2GRAY)
+
+    if justMask:
+        im = im*mask_curr;
+
+    im=im[min_max[1]:min_max[3],min_max[0]:min_max[2]]
     im = scipy.misc.imresize(im,size_out);
-    # print contour_curr
-    # for pixel in contour_curr:
-    #     # print pixel
-    #     pixel=pixel[0];
-    #     im[pixel[1],pixel[0],0]=0;
-    #     im[pixel[1],pixel[0],1]=255;
-    #     im[pixel[1],pixel[0],2]=0;
 
     scipy.misc.imsave(out_file,im);
         # '../scratch/test.jpg',im);
@@ -271,19 +261,22 @@ def makeResizeImAndFile():
     lines_new=[];
     out_file_new=os.path.join(out_dir_files,'annos_all.txt');
 
-    for line_curr in lines:
+    for idx_line_curr,line_curr in enumerate(lines):
+        if idx_line_curr%100==0:
+            print idx_line_curr,len(lines);
         anno=line_curr.split(' ')[1];
         file_curr=line_curr.split(' ')[0];
         dir_curr=os.path.split(file_curr)[0];
         mask_dir_curr=dir_curr+'_mask';
         mask_file=os.path.join(mask_dir_curr,os.path.split(file_curr)[1]);
-        out_dir_curr=dir_curr+'_rs';
+        out_dir_curr=dir_curr+'_rsMask';
         util.mkdir(out_dir_curr);
         out_file=os.path.join(out_dir_curr,os.path.split(file_curr)[1]);
         # print file_curr,mask_file,out_file
         try:
-            saveResizeImage(file_curr,mask_file,out_file);
+            saveResizeImage(file_curr,mask_file,out_file,justMask=True);
             lines_new.append(out_file+' '+anno);
+            visualize.writeHTMLForFolder(out_dir_curr);
         except:
             print 'ERROR',line_curr
             continue
@@ -346,21 +339,24 @@ def writeScriptForTraining():
     # model_file='../models/base_khorrami_model_1.dat'
     # experiment_name='horses_twoClass'
     
-    dir_files='../data/karina_vids/train_test_files_01';
+    # dir_files='../data/karina_vids/train_test_files_01';
+    dir_files='../data/karina_vids/train_test_files_mask';
     twoClass=False;
     # model_file='../models/base_khorrami_model_2.dat'
     # experiment_name='horses_twoClass_01'
-    # mean_im_path=None;
+    mean_im_path=None;
     # onlyLast=False;
 
     model_file='../models/ck_khorrami_model_forFT_2.dat'
-    mean_im_path='../data/ck_96/train_test_files/train_0_mean.png';
-    std_im_path='../data/ck_96/train_test_files/train_0_std.png'
-    # experiment_name='horses_twoClass_01_ft_slr'
+    # mean_im_path='../data/ck_96/train_test_files/train_0_mean.png';
+    # std_im_path='../data/ck_96/train_test_files/train_0_std.png'
+    # # experiment_name='horses_twoClass_01_ft_slr'
 
-    experiment_name='horses_twoClass_01_ft_higherLast'
-    onlyLast=False
-    lower=True
+    experiment_name='horses_twoClass_01_ft_higherLast_mask'
+    experiment_name='horses_twoClass_01_ft_slr_mask'
+    experiment_name='horses_twoClass_01_ft_onlyLast_mask'
+    onlyLast=True
+    lower=False
 
     num_scripts=1;
     out_dir_meta=os.path.join('../experiments',experiment_name);
@@ -379,7 +375,7 @@ def writeScriptForTraining():
         if mean_im_path is not None:
             command = scripts_and_viz.writeBlurScript(path_to_th,out_dir_meta,dir_files,fold_num,model_file=model_file,twoClass=twoClass,iterations=iterations,saveAfter=saveAfter,learningRate=learningRate,testAfter=testAfter,mean_im_path=mean_im_path,std_im_path=std_im_path, onlyLast=onlyLast,lower=lower);
         else:
-            command = scripts_and_viz.writeBlurScript(path_to_th,out_dir_meta,dir_files,fold_num,model_file=model_file,twoClass=twoClass,iterations=iterations,saveAfter=saveAfter,learningRate=learningRate,testAfter=testAfter);
+            command = scripts_and_viz.writeBlurScript(path_to_th,out_dir_meta,dir_files,fold_num,model_file=model_file,twoClass=twoClass,iterations=iterations,saveAfter=saveAfter,learningRate=learningRate,testAfter=testAfter,onlyLast=onlyLast,lower=lower);
         commands_all.append(command);
 
     commands=np.array(commands_all);
@@ -393,10 +389,65 @@ def writeScriptForTraining():
 
     # util.writeFile(out_file_script,commands_all);
 
-def main():
-    writeScriptForTraining()
 
-    return
+def createComparativeHtml():
+    experiment_name='test_mean_blur';
+    out_dir_meta_meta=os.path.join(dir_server,'expression_project','experiments');
+
+    out_dir_meta_pre='horses_twoClass_01_ft_';
+    out_dir_meta_posts=['slr_mask','onlyLast_mask','higherLast_mask'];
+    out_dir_metas=[os.path.join(out_dir_meta_meta,out_dir_meta_pre+out_dir_meta_post) for out_dir_meta_post in out_dir_meta_posts];
+
+    dir_files='../data/karina_vids/train_test_files_01'
+    for out_dir_meta in out_dir_metas:
+        dir_comps=[out_dir_meta]
+        range_folds=[0];
+        # range(6);
+        
+        expressions=[None]
+        right=True;
+
+        npy_file_pred='1_pred_labels.npy';
+        npy_file_gt='1_gt_labels.npy';
+        posts=['_org','_gb_gcam','_gb_gcam_pred','_hm','_hm_pred','_gb_gcam_org','_gb_gcam_org_pred']
+        
+        batchSizeTest=128;
+        for expression_curr in expressions:
+        
+            out_file_html=os.path.join(out_dir_meta,str(expression_curr)+'.html');
+            ims_all=[];
+            captions_all=[];
+            for fold_num in range_folds:    
+                data_path=os.path.join(dir_files,'train_'+str(fold_num)+'.txt');
+                gt_labels_file=os.path.join(dir_comps[0],str(fold_num),'test_images',npy_file_gt);
+                gt_labels=np.load(gt_labels_file);    
+                num_batches=int(math.ceil(len(gt_labels)/128.0))
+                im_pre=np.array([str(batch_num)+'_'+str(im_num) for batch_num in range(1,num_batches+1) for im_num in range(1,batchSizeTest+1)]);
+                im_pre=im_pre[:len(gt_labels)];
+                if expression_curr is not None:
+                    bin_keep=gt_labels==expression_curr;
+                else:
+                    bin_keep=gt_labels==gt_labels
+                gt_rel=gt_labels[bin_keep]
+                # print bin_keep.shape;
+                # print im_pre.shape
+                im_pre_rel=im_pre[bin_keep];
+
+                dir_ims=[os.path.join(dir_curr,str(fold_num),'test_images') for dir_curr in dir_comps];
+                pred_rels=[np.load(os.path.join(dir_curr,npy_file_pred))[bin_keep] for dir_curr in dir_ims];
+
+                for idx_im_pre_curr,im_pre_curr in enumerate(im_pre_rel):
+                    for idx_epoch in range(len(dir_ims)):
+                        im_row=[util.getRelPath(os.path.join(dir_ims[idx_epoch],im_pre_curr+post_curr+'.jpg'),dir_server) for post_curr in posts];
+                        caption_pre='right' if pred_rels[idx_epoch][idx_im_pre_curr]==gt_rel[idx_im_pre_curr] else 'wrong'
+                        caption_row=[str(idx_im_pre_curr)+' '+caption_pre+' '+str(int(gt_rel[idx_im_pre_curr]))+' '+str(int(pred_rels[idx_epoch][idx_im_pre_curr]))]*len(im_row);
+                        ims_all.append(im_row[:]);
+                        captions_all.append(caption_row[:])
+
+            visualize.writeHTML(out_file_html,ims_all,captions_all,100,100);
+            print out_file_html.replace(dir_server,click_str);
+
+def writeTrainTestFiles01():
     train_test_dir='../data/karina_vids/train_test_files';
     out_dir='../data/karina_vids/train_test_files_01';
     util.mkdir(out_dir);
@@ -417,6 +468,36 @@ def main():
                 lines_new.append(' '.join(line_split));
 
             util.writeFile(out_file,lines_new);
+
+def writeTrainTestFilesMaskIm():
+    train_test_dir='../data/karina_vids/train_test_files_01';
+    out_dir='../data/karina_vids/train_test_files_mask';
+    
+    util.mkdir(out_dir);
+    num_folds=6;
+    in_file_pres=['train_','test_'];
+    train_pre=in_file_pres[0]
+    range_folds=range(num_folds);
+
+    for num_fold in range_folds:
+        for in_file_pre in in_file_pres:
+            in_file=os.path.join(train_test_dir,in_file_pre+str(num_fold)+'.txt');
+            out_file=os.path.join(out_dir,in_file_pre+str(num_fold)+'.txt');
+            lines=util.readLinesFromFile(in_file);
+            lines_new=[line_curr.replace('_rs/','_rsMask/') for line_curr in lines];
+            util.writeFile(out_file,lines_new);
+    
+    preprocess_data.saveCKMeanSTDImages(out_dir,train_pre,resize_size=None,num_folds=num_folds)
+
+
+
+def main():
+
+    # writeTrainTestFilesMaskIm();
+    # makeResizeImAndFile()
+    createComparativeHtml();
+    # writeScriptForTraining()
+
                 
 
 
