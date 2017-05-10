@@ -704,29 +704,37 @@ def writeScriptSchemesFixThresh():
 def writeScriptSchemesAutoThresh():
 
     dir_exp_old='../experiments/khorrami_ck_rerun';
-    
-
+    dir_files='../data/ck_96/train_test_files';
     experiment_name='ck_meanBlur_autoThresh_100_inc';
+    folds_range=[6];
+
+    dir_exp_old='../experiments/noBlur_meanFirst_pixel_augment/noBlur_meanFirst_7out';
+    dir_files='../data/tfd/train_test_files';
+    experiment_name='tfd_meanBlur_autoThresh_100_inc';
+    folds_range=[4];
+
     out_dir_meta_meta='../experiments/'+experiment_name;
     util.mkdir(out_dir_meta_meta);
-    out_script='../scripts/train_'+experiment_name+'_mix';
+    out_script='../scripts/train_'+experiment_name;
     num_scripts=2;
     
 
     util.mkdir(out_dir_meta_meta);
-    folds_range=[6];
-    epoch_starts=range(100,600,100);
+    
+    epoch_starts=[200,500,100,400];
+    # range(100,600,100);
     startingActivation=0.05;
     fixThresh=0.05;
-    activationThreshMax=0.2;
+    activationThreshMax=0.15;
     total_epochs=1000;
-    schemes=['ncl','mixcl']
-    epoch_starts=[[200,300,400,500],[500]];
+    schemes=['mixcl']
+    # ['ncl','mixcl']
+    # epoch_starts=[[100,200,300,400,500],[100,200,300,400,500]];
     # ,'mix'];
     # schemes=['mix'];
     path_to_th='train_khorrami_withBlur.th';
 
-    dir_files='../data/ck_96/train_test_files';
+    
     
     # batchSizeTest=128;
     batchSize=128;
@@ -740,7 +748,8 @@ def writeScriptSchemesAutoThresh():
         for idx_scheme,scheme in enumerate(schemes):
             out_dir_meta=os.path.join(out_dir_meta_meta,scheme);
             util.mkdir(out_dir_meta);
-            for epoch_start in epoch_starts[idx_scheme]: 
+            for epoch_start in epoch_starts:
+            # epoch_starts[idx_scheme]: 
                 out_dir_meta_curr=os.path.join(out_dir_meta,str(epoch_start));
                 util.mkdir(out_dir_meta_curr);
                 # if scheme=='mix':
@@ -845,29 +854,42 @@ def createComparativeHtml():
         print out_file_html.replace(dir_server,click_str);
 
 def printTestAccuracy():
-    dir_meta='../experiments/ck_meanBlur_fixThresh_100_inc';
-    schemes=['mixcl','ncl'];
+    # dir_meta='../experiments/ck_meanBlur_fixThresh_100_inc';
+    # schemes=['mixcl','ncl'];
+    # # schemes=['mix'];
+    # inc_range=range(100,600,100);
+    # num_fold=6;
+
+    dir_meta='../experiments/tfd_meanBlur_fixThresh_100_inc';
+    schemes=['mixcl','ncl','mix'];
     # schemes=['mix'];
     inc_range=range(100,600,100);
-    num_fold=6;
+    num_fold=4;
+
     for scheme in schemes:
         for inc in inc_range:
             file_curr=os.path.join(dir_meta,scheme,str(inc),str(num_fold),'test_images','log_test.txt');
             lines=util.readLinesFromFile(file_curr);
-            print file_curr
-            print scheme,inc
-            print lines[-1];
+            accu=lines[-1].split(':')[-1];
 
-    return
-    # writeScriptSchemesFixThresh()
-    out_dir_meta='../experiments/khorrami_ck_rerun'
-    num_folds=10;
-    for fold_num in range(num_folds):
-        test_file=os.path.join(out_dir_meta,str(fold_num),'test_images','log_test.txt');
-        print test_file
-        lines=util.readLinesFromFile(test_file);
-        print fold_num
-        print lines[-1];
+            file_log=os.path.join(dir_meta,scheme,str(inc),str(num_fold),'intermediate','log.txt');
+            log_lines=util.readLinesFromFile(file_log)
+            # print log_lines[-2].split('at: ')[1][:6];
+            
+            # print file_curr
+            print '\t'.join([scheme,str(inc),log_lines[-2].split('at: ')[1][:6],accu[1:6]]);
+            # print lines[-1];
+
+    # return
+    # # writeScriptSchemesFixThresh()
+    # out_dir_meta='../experiments/khorrami_ck_rerun'
+    # num_folds=10;
+    # for fold_num in range(num_folds):
+    #     test_file=os.path.join(out_dir_meta,str(fold_num),'test_images','log_test.txt');
+    #     print test_file
+    #     lines=util.readLinesFromFile(test_file);
+    #     print fold_num
+    #     print lines[-1];
 
 
 def createComparativeHTMLs_diffTypes_1():
@@ -1052,35 +1074,12 @@ def writeScriptTFDTestsDiffSchemes():
 
 
 def main():
-    writeScriptSchemesFixThresh()
-    return
-    num_folds=5;
-    data_dir='../data/tfd/train_test_files';
-    train_pre='train_';
-    test_pre='test_';
-    train_lines=[];
-    test_lines=[];
-    for num_fold in range(num_folds):
-        train_file_curr=os.path.join(data_dir,train_pre+str(num_fold)+'.txt');
-        test_file_curr=os.path.join(data_dir,test_pre+str(num_fold)+'.txt');
-        train_lines.extend(util.readLinesFromFile(train_file_curr));
-        test_lines.extend(util.readLinesFromFile(test_file_curr));
+    writeScriptSchemesAutoThresh();
+    # printTestAccuracy();
 
-    print len(train_lines),len(test_lines);
-    train_lines=list(set(train_lines));
-    test_lines=list(set(test_lines));
-    print len(train_lines),len(test_lines);
-    train_lines=np.array(train_lines);
-    test_lines=np.array(test_lines);
-    bin_overlap=np.in1d(test_lines,train_lines);
-    print bin_overlap.shape,np.sum(bin_overlap); 
-
-
+    # writeScriptSchemesFixThresh()
     # writeScriptTFDTestsDiffSchemes()
-
     # writeScriptSchemesAutoThresh()
-    
-
     # writeTFDSchemeScripts();
     # writeHTMLs_viz_inc();
     # writeCKScripts_viz_inc();

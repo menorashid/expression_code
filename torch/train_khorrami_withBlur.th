@@ -183,9 +183,9 @@ function test(params)
     for i=1,params.iterationsTest do
         -- vd:getTrainingData();
         local out_file_pre=paths.concat(out_dir_images,i..'_');
-        vd:buildBlurryBatch(params.layer_to_viz,0.0,'ncl',out_file_pre,true);
+        -- vd:buildBlurryBatch(params.layer_to_viz,0.0,'ncl',out_file_pre,true);
             -- ,true)
-        -- vd:getTrainingData();
+        vd:getTrainingData();
         vd.training_set.data=vd.training_set.data:cuda();
         vd.training_set.label=vd.training_set.label:cuda();
         local batch_inputs=vd.training_set.data;
@@ -273,13 +273,13 @@ function test(params)
     -- print (batch_targets_all:size());
 
     -- local conf = optim.ConfusionMatrix( {'neutral', 'anger','contempt','disgust', 'fear', 'happy', 'sadness', 'surprise'} )
-    -- local conf = optim.ConfusionMatrix( {'anger','disgust', 'fear', 'happy', 'sadness', 'surprise','neutral'} )
+    local conf = optim.ConfusionMatrix( {'anger','disgust', 'fear', 'happy', 'sadness', 'surprise','neutral'} )
     if params.twoClass then
         outputs_all=torch.remainder(outputs_all+1,2);
         batch_targets_all=torch.remainder(batch_targets_all+1,2);
     end
 
-    local conf = optim.ConfusionMatrix( {'neutral','pain'} )
+    -- local conf = optim.ConfusionMatrix( {'neutral','pain'} )
     conf:zero()    
     conf:batchAdd( outputs_all, batch_targets_all )         -- accumulate errors
     print (conf);
@@ -704,7 +704,7 @@ main(params);
 -- cmd:option('-iterations',1,'num of iterations to run');
 -- cmd:option('-batchSize',132,'batch size');
 
-cmd:option('-outDirTest',paths.concat(params.outDir,'test_images'));
-params = cmd:parse(arg)
-test(params);
+-- cmd:option('-outDirTest',paths.concat(params.outDir,'test_images'));
+-- params = cmd:parse(arg)
+-- test(params);
 -- testGlobal();
