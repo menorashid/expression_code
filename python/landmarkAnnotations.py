@@ -16,9 +16,12 @@ click_str='http://vision1.idav.ucdavis.edu:1000/';
 
 def getAnnoNumpy(im_file,detector,predictor,num_kp=68):
 	im=io.imread(im_file);
-	dets=detector(im);
-	if len(dets)>1:
-		print 'MOREDETS';
+	if detector is None:
+		dets=[dlib.rectangle(0,0,96,96)];
+	else:	
+		dets=detector(im);
+		if len(dets)>1:
+			print 'MOREDETS';
 	shape=predictor(im,dets[0]);
 	parts=[[shape.part(num).x,shape.part(num).y] for num in range(num_kp)]
 	return parts
@@ -122,17 +125,10 @@ def writeTrainTestFilesWithAnno():
 			annos=getAnnoNumpy(im_file,detector,predictor);
 			annos_string=getAnnoString(annos,annos_to_keep,avg_nums);
 			lines_new.append(line_curr+' '+annos_string)			
-			
 		util.writeFile(out_file,lines_new);
 		print out_file;
 	
-
-def main():
-	
-	# saveHappyNeutralTrainTest()
-	# writeTrainTestFilesWithAnno()
-
-
+def writeTrainScript():
 	path_to_th='train_withAnno.th';
 	out_dir_meta='../experiments/happy_neutral/bl';
 	util.makedirs(out_dir_meta);
@@ -147,6 +143,79 @@ def main():
 
 	command = scripts_and_viz.writeBlurScript(path_to_th,out_dir_meta,dir_files,fold_num,model_file=model_file,twoClass=twoClass,iterations=iterations,saveAfter=saveAfter,learningRate=learningRate,testAfter=testAfter);
 	print command;
+
+def main():
+	predictor_file='../../dlib-19.4.0/python_examples/shape_predictor_68_face_landmarks.dat';
+	out_dir=os.path.join(dir_server,'expression_project','scratch','tfd_4_anno');
+	util.mkdir(out_dir);
+
+	data_dir='../data/tfd/train_test_files';
+	# /test_4.txt';
+	in_file_pre='4';
+
+	file_list=[os.path.join(data_dir,file_pre+'_'+in_file_pre+'.txt') for file_pre in ['train','test']];
+	new_files=[os.path.join(data_dir,file_pre+'_'+in_file_pre+'_withAnno.txt') for file_pre in ['train','test']];
+	
+	detector=None;
+	predictor=dlib.shape_predictor(predictor_file);
+	
+	annos_to_keep=[[num] for num in range(17,68)];
+	avg_nums=[[num,num] for num in range(len(annos_to_keep))];
+
+	for data_file,out_file in zip(file_list,new_files):
+		
+		lines_old=util.readLinesFromFile(data_file);
+		lines_new=[];
+		for im_num,line_curr in enumerate(lines_old):
+			im_file=line_curr.split(' ')[0]
+			if im_num%100==0:
+				print im_num,len(lines_old);
+			annos=getAnnoNumpy(im_file,detector,predictor);
+			annos_string=getAnnoString(annos,annos_to_keep,avg_nums);
+			lines_new.append(line_curr+' '+annos_string)			
+			# break;
+		util.writeFile(out_file,lines_new);
+		print out_file;
+
+
+	return
+	lines=util.readLinesFromFile(test_file);	
+	print len(lines);
+	ims=[line_curr.split(' ')[0] for line_curr in lines];
+	
+
+	annos_to_keep=[[48],[54],[62,66]];
+	avg_nums=[[0,0],[1,1],[2,2],[0,2],[1,2]];
+	
+	detector=None;
+	predictor=dlib.shape_predictor(predictor_file);
+	
+	
+	for im_num,im_curr in enumerate(ims):
+		print im_num
+		out_file=os.path.join(out_dir,str(im_num)+'.jpg');
+		annos=getAnnoNumpy(im_curr,detector,predictor);
+		print len(annos)
+		# .shape;
+		# print annos
+		# break;
+		im=cv2.imread(im_curr);
+		for anno_curr in annos[17:]:
+			cv2.circle(im,tuple(anno_curr),2,(0,0,255),-1);
+		cv2.imwrite(out_file,im);
+
+	visualize.writeHTMLForFolder(out_dir);
+
+
+
+	
+
+
+	# saveHappyNeutralTrainTest()
+	# writeTrainTestFilesWithAnno()
+
+
+	
  #    fold_num,
  #    model_file=None,
  #    batchSize=128,

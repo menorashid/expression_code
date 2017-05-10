@@ -206,9 +206,6 @@ do
 
     end
 
- 
-
-
     function data:buildBlurryBatch(pointSize,bin_blur)
 
         if self.net:type()~='torch.CudaTensor' then
@@ -254,6 +251,72 @@ do
             --     print (im_num);
             end
         end
+
+    end
+
+    function data:getPointImportance(layer_to_viz,also_pred)
+        -- local also_pred=false;
+
+        local gauss_layer_small = self.gauss_layer_small;
+        local up_layer = self.up_layer;
+        local min_layer = self.min_layer;
+        local max_layer = self.max_layer;
+        
+        local train_state=self.net.train;
+        
+        if self.net:type()~='torch.CudaTensor' then
+            self.net=self.net:cuda();
+        end
+        
+        if self.net_gb:type()~='torch.CudaTensor' then
+            self.net_gb=self.net_gb:cuda();
+        end
+        
+        if train_state then
+            self.net:evaluate();
+            self.net_gb:evaluate();
+        end
+
+        -- build a batch of images mean preprocessed before augmentation
+        self:getTrainingData();
+        
+        -- set cuda
+        self.training_set.data = self.training_set.data:cuda();
+        self.training_set.label = self.training_set.label:cuda();
+        local batch_inputs = self.training_set.data;
+        local batch_targets = self.training_set.label;
+        
+        -- get gcam stuff
+        local gcam_both,gb_viz_both,pred_labels = self:getGCamEtc(self.net,self.net_gb,layer_to_viz,batch_inputs,batch_targets,also_pred)
+        
+        local bin_keep=pred_labels:eq(batch_targets);
+        -- print (torch.sum(bin_keep)/bin_keep:nElement());
+
+        -- set input range 0-1
+        local inputs_org=batch_inputs;
+        local min_vals=self.min_layer:forward(inputs_org):clone();
+        inputs_org=inputs_org-min_vals;
+        local max_vals=self.max_layer:forward(inputs_org):clone();
+        inputs_org:cdiv(max_vals);
+
+        -- local im_blur_all,gcam_curr,gb_gcam_all,gb_gcam_org_all,gb_gcam_th_all=self:getMeanBlurredImages(inputs_org,min_vals,max_vals,gcam_both[2],gb_viz_both[2],activation_thresh,strategy,bin_keep)
+        -- local im_blur_all_pred,gcam_curr_pred,gb_gcam_all_pred,gb_gcam_org_all_pred,gb_gcam_th_all_pred;
+        -- if also_pred then
+        --     im_blur_all_pred,gcam_curr_pred,gb_gcam_all_pred,gb_gcam_org_all_pred,gb_gcam_th_all_pred=self:getMeanBlurredImages(inputs_org,min_vals,max_vals,gcam_both[1],gb_viz_both[1],activation_thresh,strategy,bin_keep)
+        -- end
+
+        -- getMeanBlurredImages(inputs_org,min_vals,max_vals,gcam_curr,gb_viz_curr,activation_thresh,strategy,bin_keep);
+        local idx_gcam=1;
+        local gcam_curr=gcam_both[idx_gcam];
+        local gb_viz_curr=gb_viz_both[idx_gcam];
+        gcam_curr = up_layer:forward(gcam_curr):clone();
+        local gb_gcam_org_all = torch.cmul(gb_viz_curr,gcam_curr);
+        local gb_gcam_all = torch.abs(gb_gcam_org_all);
+        gb_gcam_all:cdiv(max_layer:forward(gb_gcam_all:csub(min_layer:forward(gb_gcam_all))));
+        gb_gcam_all=gauss_layer_small:forward(gb_gcam_all):clone();
+        gb_gcam_all:cdiv(max_layer:forward(gb_gcam_all:csub(min_layer:forward(gb_gcam_all))));
+        gb_gcam_all[gb_gcam_all:ne(gb_gcam_all)]=0;
+        return gb_gcam_all
 
     end
 
@@ -320,7 +383,7 @@ do
         local file_lines = {};
         for line in io.lines(file_path) do 
             local line_curr_split={}
-            for i=1,11 do
+            for i=1,2*self.numAnnos+1 do
                 local start_idx, end_idx = string.find(line, ' ');
                 local start_string=string.sub(line,1,start_idx-1);
                 line=string.sub(line,end_idx+1,#line);
@@ -472,8 +535,16 @@ do
         local len_table=#table-start_idx;
         local end_idx=#table;
         assert (len_table%2==0);
-        local row_map={1,5,3,2,4};
-        -- row_map={1,2,3,4,5};
+        local row_map;
+        if self.numAnnos==5 then
+            row_map={1,5,3,2,4};
+        else
+            row_map={};
+            for row_num=1,self.numAnnos do
+                row_map[#row_map+1]=row_num;
+            end
+        end
+        
         local tensor=torch.zeros(len_table/2,2);
         for i=1,len_table do
             local row=math.ceil(i/2);
@@ -515,6 +586,11 @@ do
                     training_set.label[curr_idx]=tonumber(label_face);
                 else
                     training_set.label[curr_idx]=tonumber(label_face)+1;
+                    -- if tonumber(label_face)==-1 then
+                    --     training_set.label[curr_idx]=1;
+                    -- else
+                    --     training_set.label[curr_idx]=2;
+                    -- end
                 end
 
                 training_set.anno[curr_idx]=anno_face;

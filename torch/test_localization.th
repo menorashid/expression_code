@@ -1,0 +1,268 @@
+require 'image'
+npy4th = require 'npy4th'
+require 'data_face_meanFirst_withAnno';
+require 'cunn'
+require 'cudnn'
+require 'nn';
+require 'optim'
+require 'torchx';
+require 'gnuplot';
+dump=require 'dump';
+visualize=require 'visualize';
+utils = require 'misc.utils'
+
+function main(params) 
+    print ('setting_threads');
+    torch.setnumthreads(1);
+	local data_path=params.data_path;
+	local out_dir=params.outDir
+    local net_file=params.model
+    if params.limit<0 then
+    	params.limit=nil;
+    end
+    local val_data_path;
+    local val_human_path
+    if params.testAfter>0 then
+    	val_data_path= params.val_data_path
+    end
+
+    paths.mkdir(out_dir);
+    local out_dir_intermediate=paths.concat(out_dir,'intermediate');
+    local out_dir_final=paths.concat(out_dir,'final');
+    local out_dir_images_blur=paths.concat(out_dir,'blur_im');
+    paths.mkdir(out_dir_intermediate);
+    paths.mkdir(out_dir_final);
+    paths.mkdir(out_dir_images_blur);
+    
+    
+    local out_file_net=paths.concat(out_dir_final,'model_all_final.dat');
+    local out_file_loss=paths.concat(out_dir_final,'loss_final.npy');
+    local out_file_loss_val=paths.concat(out_dir_final,'loss_final_val.npy');
+    
+    local out_file_intermediate_pre = paths.concat(out_dir_intermediate,'model_all_');
+    local out_file_loss_intermediate_pre = paths.concat(out_dir_intermediate,'loss_all_');
+
+    local out_file_loss_plot=paths.concat(out_dir_intermediate,'loss_all.png');
+    local out_file_log=paths.concat(out_dir_intermediate,'log.txt');
+    local logger=torch.DiskFile(out_file_log,'w');
+
+    logger:writeString(dump.tostring(params)..'\n');
+    print (params);
+
+    cutorch.setDevice(params.gpu);
+
+
+    logger:writeString(dump.tostring('loading network')..'\n');
+    print ('loading network');
+    local net = torch.load(net_file);
+    -- net:remove(#net);
+    -- net:remove(12);
+    logger:writeString(dump.tostring('done loading network')..'\n');
+    print ('done loading network');
+    print (net);
+
+
+    logger:writeString(dump.tostring('making cuda')..'\n');
+    print ('making cuda');
+    net = net:cuda();
+    logger:writeString(dump.tostring('done')..'\n');
+    print ('done');
+
+    logger:writeString(dump.tostring('making net_gb')..'\n');
+    print ('making net_gb');
+    local net_gb= net:clone();
+    net_gb:replace(utils.guidedbackprop);
+    net_gb = net_gb:cuda();
+    logger:writeString(dump.tostring('done')..'\n');
+    print ('done');
+
+    logger:writeString(dump.tostring('loading params')..'\n');
+    print ('loading params');
+    local parameters, gradParameters = net:parameters()
+    logger:writeString(dump.tostring('loading done')..'\n');
+    print ('loading done');
+    
+    local data_params={file_path=val_data_path,
+					batch_size=params.batchSize,
+					mean_file=params.mean_im_path,
+					std_file=params.std_im_path,
+					augmentation=false,
+					limit=params.limit,
+                    conv_size=params.conv_size,
+                    net=net:clone(),
+                    net_gb=net_gb:clone(),
+                    optimize=params.optimize,
+                    twoClass=params.twoClass,
+                    numAnnos=params.numAnnos
+                    };
+
+	local vd=data_face(data_params);
+
+    local criterion;
+    if params.twoClass then
+    -- if params.weights_file then
+    --     local criterion_weights=npy4th.loadnpy(params.weights_file);
+    --     criterion=nn.CrossEntropyCriterion(criterion_weights):cuda()
+    -- else
+        criterion=nn.SoftMarginCriterion():cuda();
+    else
+        criterion=nn.CrossEntropyCriterion():cuda()
+    end
+    
+    -- local criterion = nn.ClassNLLCriterion(criterion_weights):cuda();
+
+
+    local val_losses = {};
+    local val_losses_iter = {};
+
+    net:evaluate();
+    net_gb:evaluate();
+
+    for i=1,params.iterations do
+    	local bool=true
+        -- local minibatch_loss = doTheUpdate(td,net,criterion,parameters,gradParameters,optimMethod,optimStateTotal)
+        -- print (activationThresh);    
+        -- vd:getTrainingData();
+        -- print (vd.training_set.anno[10]);
+        local gcam_gt = vd:getPointImportance(params.layer_to_viz,false);
+        print (gcam_gt:size());
+        for im_num=1,gcam_gt:size(1) do
+        	
+        	if bool then
+        		print ('im_num',im_num);
+        	end
+
+        	local class_curr=vd.training_set.label[im_num];
+        	local anno_curr=vd.training_set.anno[im_num];
+        	local input=vd.training_set.input[im_num];
+        	local out_file=paths.concat(out_dir_images_blur,i..'_'..im_num..'.jpg');
+
+        	local im_curr=gcam_gt[im_num];
+        	if class_curr==4 and bool then
+        		
+        		print (im_num,input[1],input[2],class_curr);
+        		-- print (anno_curr)
+        	
+        		for anno_num=1,anno_curr:size(1) do
+        			local x=anno_curr[anno_num][1];
+        			local y=anno_curr[anno_num][2];
+        			if x<1 then x=1 end
+        			if x>96 then x=96 end
+        			if y<1 then y=1 end
+        			if y>96 then y=96 end
+        			
+        			local imp=im_curr[1][y][x];
+        			print (anno_num,x,y,imp);
+        		end
+        		-- print (im_curr:size(),torch.min(im_curr),torch.max(im_curr),im_num,vd.training_set.label[im_num])
+        		bool=false;
+        	end
+        	image.save(out_file, image.toDisplayTensor(im_curr));
+
+        end
+
+        vd.training_set.data=vd.training_set.data:cuda();
+		vd.training_set.label=vd.training_set.label:cuda();
+		local batch_inputs=vd.training_set.data;
+		local batch_targets=vd.training_set.label;
+		print (torch.min(batch_inputs),torch.max(batch_inputs));
+		print (torch.min(batch_targets),torch.max(batch_targets));
+		    
+	    net:zeroGradParameters();
+
+        local outputs=net:forward(batch_inputs);
+        local indices;
+        if params.twoClass then
+            local outputs_d=outputs:double();
+            indices=torch.zeros(outputs:size());
+            indices[outputs_d:gt(0)]=1;
+            indices[outputs_d:le(0)]=-1;
+        else
+            local maxs;
+            maxs, indices = torch.max(outputs, 2);
+        end
+
+        indices=indices:view(batch_targets:size());
+        indices=indices:type(batch_targets:type());
+        local loss = torch.sum(batch_targets:eq(indices))/batch_targets:nElement();
+            
+        val_losses[#val_losses+1]=loss;
+        val_losses_iter[#val_losses_iter+1]=i;
+
+        disp_str=string.format("minibatches processed: %6s, val loss = %6.6f", i, val_losses[#val_losses])
+        logger:writeString(dump.tostring(disp_str)..'\n');
+        print(disp_str)
+        
+        -- check if model needs to be saved. save it.
+        -- also save losses
+        
+    end
+	collectgarbage();
+    local py_str='python ../python/visualizeForFolder.py '..out_dir_images_blur..' '..'.jpg';
+    os.execute(py_str);
+end
+
+
+
+cmd = torch.CmdLine()
+cmd:text()
+cmd:text('Train Face network')
+cmd:text()
+cmd:text('Options')
+
+local epoch_size=1;
+local scheme = 'ncl';
+local temp ='../scratch/test_pointImportance';
+
+
+cmd:option('-model','../experiments/noBlur_meanFirst_pixel_augment/noBlur_meanFirst_7out/4/final/model_all_final.dat');
+cmd:option('-mean_im_path','../data/tfd/train_test_files/train_4_mean.png');
+cmd:option('-std_im_path','../data/tfd/train_test_files/train_4_std.png');
+
+cmd:option('-limit',-1,'num of training data to read');
+cmd:option('-iterations',1*epoch_size,'num of iterations to run');
+
+cmd:option('-ratioBlur',1);
+cmd:option('-startingActivation',0);
+cmd:option('-fixThresh',-1);
+cmd:option('-incrementDifficultyAfter',0);
+cmd:option('-activationThreshMax',0.5);
+cmd:option('-scheme',scheme);
+cmd:option('-conv_size',5);
+cmd:option('-layer_to_viz',8);
+cmd:option('-optimize',true);
+
+
+-- cmd:option('-numAnnos',5);
+cmd:option('-numAnnos',51);
+
+cmd:option('-overwrite',true);
+
+cmd:option('-saveAfter',1*epoch_size,'num of iterations after which to save model');
+cmd:option('-batchSize',128,'batch size');
+cmd:option('-testAfter',10*epoch_size,'num iterations after which to get validation loss');
+cmd:option('-dispAfter',1,'num iterations after which to display training loss');
+cmd:option('-dispPlotAfter',1*epoch_size,'num iterations after which to plot loss curves');
+
+cmd:option('-val_data_path','../data/tfd/train_test_files/test_4_withAnno.txt')
+cmd:option('-data_path','../data/tfd/train_test_files/train_0.txt')
+-- cmd:option('-weights_file','../data/tfd/train_test_files/train_0_weights.npy')
+cmd:option('-iterationsTest',1,'num of iterations to run');
+cmd:option('-batchSizeTest',132,'batch size');
+
+cmd:option('learningRate', 1e-2)
+cmd:option('weightDecay', 1e-5)
+cmd:option('momentum', 0.9)
+
+cmd:option('augmentation' , true);
+
+cmd:option('-gpu',1,'gpu to run the training on');
+cmd:option('-outDir',temp);
+cmd:option('-modelTest',paths.concat(temp,'final/model_all_final.dat'));
+
+cmd:option('-twoClass',false);
+cmd:option('-onlyLast',false);
+cmd:option('-lower',false);
+
+params = cmd:parse(arg)
+main(params);
