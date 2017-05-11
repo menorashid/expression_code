@@ -144,7 +144,7 @@ def writeTrainScript():
 	command = scripts_and_viz.writeBlurScript(path_to_th,out_dir_meta,dir_files,fold_num,model_file=model_file,twoClass=twoClass,iterations=iterations,saveAfter=saveAfter,learningRate=learningRate,testAfter=testAfter);
 	print command;
 
-def main():
+def writeTrainTestFilesWithAnno_TFD_51():
 	predictor_file='../../dlib-19.4.0/python_examples/shape_predictor_68_face_landmarks.dat';
 	out_dir=os.path.join(dir_server,'expression_project','scratch','tfd_4_anno');
 	util.mkdir(out_dir);
@@ -177,34 +177,53 @@ def main():
 		util.writeFile(out_file,lines_new);
 		print out_file;
 
+def main():
 
-	return
+	predictor_file='../../dlib-19.4.0/python_examples/shape_predictor_68_face_landmarks.dat';
+	out_dir=os.path.join(dir_server,'expression_project','scratch','tfd_4_anno');
+	util.mkdir(out_dir);
+
+	data_dir='../data/tfd/train_test_files';
+	# /test_4.txt';
+	in_file_pre='4';
+	test_file=os.path.join(data_dir,'test_'+in_file_pre+'.txt');
+
 	lines=util.readLinesFromFile(test_file);	
 	print len(lines);
 	ims=[line_curr.split(' ')[0] for line_curr in lines];
 	
+	out_file_html=os.path.join(out_dir,'num_annos.html')	
 
-	annos_to_keep=[[48],[54],[62,66]];
-	avg_nums=[[0,0],[1,1],[2,2],[0,2],[1,2]];
-	
 	detector=None;
 	predictor=dlib.shape_predictor(predictor_file);
 	
+	im_num=125;
+	im_curr=ims[im_num];	
+
+	annos_to_keep=[num for num in range(17,68)];
+
+	print im_num
+	out_file=os.path.join(out_dir,str(im_num)+'.jpg');
+	annos=getAnnoNumpy(im_curr,detector,predictor);
+	print len(annos)
+	# .shape;
+	# print annos
+	# break;
 	
-	for im_num,im_curr in enumerate(ims):
-		print im_num
-		out_file=os.path.join(out_dir,str(im_num)+'.jpg');
-		annos=getAnnoNumpy(im_curr,detector,predictor);
-		print len(annos)
-		# .shape;
-		# print annos
-		# break;
+	ims_html=[];
+	captions=[];
+	for num_num,anno_num in enumerate(annos_to_keep):
+	# annos[17:]:
 		im=cv2.imread(im_curr);
-		for anno_curr in annos[17:]:
-			cv2.circle(im,tuple(anno_curr),2,(0,0,255),-1);
+		cv2.circle(im,tuple(annos[anno_num]),2,(0,0,255),-1);
+		out_file=os.path.join(out_dir,str(num_num)+'.jpg');
+
+		ims_html.append([util.getRelPath(out_file,dir_server)]);
+		captions.append([str(num_num)]);
 		cv2.imwrite(out_file,im);
 
-	visualize.writeHTMLForFolder(out_dir);
+	visualize.writeHTML(out_file_html,ims_html,captions,100,100);
+	# visualize.writeHTMLForFolder(out_dir);
 
 
 

@@ -272,8 +272,8 @@ function test(params)
     -- print (outputs_all:size())
     -- print (batch_targets_all:size());
 
-    -- local conf = optim.ConfusionMatrix( {'neutral', 'anger','contempt','disgust', 'fear', 'happy', 'sadness', 'surprise'} )
-    local conf = optim.ConfusionMatrix( {'anger','disgust', 'fear', 'happy', 'sadness', 'surprise','neutral'} )
+    local conf = optim.ConfusionMatrix( {'neutral', 'anger','contempt','disgust', 'fear', 'happy', 'sadness', 'surprise'} )
+    -- local conf = optim.ConfusionMatrix( {'anger','disgust', 'fear', 'happy', 'sadness', 'surprise','neutral'} )
     if params.twoClass then
         outputs_all=torch.remainder(outputs_all+1,2);
         batch_targets_all=torch.remainder(batch_targets_all+1,2);
@@ -699,12 +699,12 @@ cmd:option('-onlyLast',false);
 cmd:option('-lower',false);
 
 params = cmd:parse(arg)
-main(params);    
+-- main(params);    
 
 -- cmd:option('-iterations',1,'num of iterations to run');
 -- cmd:option('-batchSize',132,'batch size');
 
--- cmd:option('-outDirTest',paths.concat(params.outDir,'test_images'));
--- params = cmd:parse(arg)
--- test(params);
+cmd:option('-outDirTest',paths.concat(params.outDir,'test_images'));
+params = cmd:parse(arg)
+test(params);
 -- testGlobal();

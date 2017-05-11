@@ -602,45 +602,35 @@ def writeTestGradCamScript():
 
 def writeScriptSchemesFixThresh():
 
-    # dir_exp_old='../experiments/khorrami_ck_rerun';
+    dir_exp_old='../experiments/khorrami_ck_rerun';
+    experiment_name='ck_meanBlur_fixThresh_100_inc';
+    out_dir_meta_meta='../experiments/'+experiment_name;
+    util.mkdir(out_dir_meta_meta);
+    num_scripts=1;
+    model_file='../models/base_khorrami_model_8.dat'
+    dir_files='../data/ck_96/train_test_files';    
+    folds_range=[6];
     
-
-    # experiment_name='ck_meanBlur_fixThresh_100_inc';
-    # out_dir_meta_meta='../experiments/'+experiment_name;
-    # util.mkdir(out_dir_meta_meta);
-    # out_script='../scripts/train_'+experiment_name+'_mix';
+    # dir_files='../data/tfd/train_test_files';
+    # dir_exp_old='../experiments/noBlur_meanFirst_pixel_augment/noBlur_meanFirst_7out';
+    # folds_range=[4];
+    # epoch_starts=range(500,0,-100);
+    # schemes=['mix']
+    # model_file='../models/base_khorrami_model_7.dat'
+    # experiment_name='tfd_meanBlur_fixThresh_100_inc';
     # num_scripts=2;
     
 
-    # util.mkdir(out_dir_meta_meta);
-    # folds_range=[6];
-    # epoch_starts=range(100,600,100);
     startingActivation=0.05;
     fixThresh=0.05;
     activationThreshMax=0.5;
-    # schemes=['ncl','mixcl']
-    # # ,'mix'];
-    # # schemes=['mix'];
+    schemes=['mix'];
     path_to_th='train_khorrami_withBlur.th';
 
-    # dir_files='../data/ck_96/train_test_files';
-
-
-    dir_files='../data/tfd/train_test_files';
-    dir_exp_old='../experiments/noBlur_meanFirst_pixel_augment/noBlur_meanFirst_7out';
-    folds_range=[4];
-    # epoch_starts=range(500,0,-100);
-    # schemes=['ncl','mixcl']
-
-    epoch_starts=range(500,0,-100);
-    schemes=['mix']
-    model_file='../models/base_khorrami_model_7.dat'
-    experiment_name='tfd_meanBlur_fixThresh_100_inc';
+    epoch_starts=range(100,600,100);
     out_dir_meta_meta='../experiments/'+experiment_name;
     util.mkdir(out_dir_meta_meta);
     out_script='../scripts/train_'+experiment_name+'_mix';
-    num_scripts=2;
-
     
     # batchSizeTest=128;
     batchSize=128;
@@ -727,7 +717,7 @@ def writeScriptSchemesAutoThresh():
     fixThresh=0.05;
     activationThreshMax=0.15;
     total_epochs=1000;
-    schemes=['mixcl']
+    schemes=['ncl','mixcl']
     # ['ncl','mixcl']
     # epoch_starts=[[100,200,300,400,500],[100,200,300,400,500]];
     # ,'mix'];
@@ -854,17 +844,22 @@ def createComparativeHtml():
         print out_file_html.replace(dir_server,click_str);
 
 def printTestAccuracy():
-    # dir_meta='../experiments/ck_meanBlur_fixThresh_100_inc';
-    # schemes=['mixcl','ncl'];
-    # # schemes=['mix'];
-    # inc_range=range(100,600,100);
-    # num_fold=6;
-
-    dir_meta='../experiments/tfd_meanBlur_fixThresh_100_inc';
-    schemes=['mixcl','ncl','mix'];
-    # schemes=['mix'];
+    dir_meta='../experiments/ck_meanBlur_autoThresh_100_inc';
+    # schemes=['mixcl','ncl','mix'];
+    schemes=['mixcl','ncl'];
+    # ,'mix'];
     inc_range=range(100,600,100);
-    num_fold=4;
+    num_fold=6;
+
+    # dir_meta='../experiments/tfd_meanBlur_fixThresh_100_inc';
+    # schemes=['mixcl','ncl','mix'];
+    # inc_range=range(100,600,100);
+    # dir_meta='../experiments/tfd_meanBlur_autoThresh_100_inc';
+    # schemes=['mixcl','ncl'];
+    # inc_range=[100,200,400,500];
+    # schemes=['mix'];
+    
+    # num_fold=4;
 
     for scheme in schemes:
         for inc in inc_range:
@@ -877,7 +872,8 @@ def printTestAccuracy():
             # print log_lines[-2].split('at: ')[1][:6];
             
             # print file_curr
-            print '\t'.join([scheme,str(inc),log_lines[-2].split('at: ')[1][:6],accu[1:6]]);
+            print '\t'.join([scheme,str(inc),'0.2',accu[1:6]]);
+            # print '\t'.join([scheme,str(inc),log_lines[-2].split('at: ')[1][:6],accu[1:6]]);
             # print lines[-1];
 
     # return
@@ -1074,8 +1070,8 @@ def writeScriptTFDTestsDiffSchemes():
 
 
 def main():
-    writeScriptSchemesAutoThresh();
-    # printTestAccuracy();
+    # writeScriptSchemesAutoThresh();
+    printTestAccuracy();
 
     # writeScriptSchemesFixThresh()
     # writeScriptTFDTestsDiffSchemes()
