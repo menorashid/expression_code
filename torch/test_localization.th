@@ -37,7 +37,7 @@ function main(params)
     print ('setting_threads');
     torch.setnumthreads(1);
 	local data_path=params.data_path;
-	local out_dir=params.outDir
+	local out_dir=params.outDirTest
     local net_file=params.modelTest
     if params.limit<0 then
     	params.limit=nil;
@@ -49,23 +49,24 @@ function main(params)
     end
 
     paths.mkdir(out_dir);
-    local out_dir_intermediate=paths.concat(out_dir,'intermediate');
-    local out_dir_final=paths.concat(out_dir,'final');
-    local out_dir_images_blur=paths.concat(out_dir,'blur_im');
-    paths.mkdir(out_dir_intermediate);
-    paths.mkdir(out_dir_final);
-    paths.mkdir(out_dir_images_blur);
+    -- local out_dir_intermediate=paths.concat(out_dir,'intermediate');
+    -- local out_dir_final=paths.concat(out_dir,'final');
+    local out_dir_images_blur=out_dir
+    -- ,'blur_im');
+    -- paths.mkdir(out_dir_intermediate);
+    -- paths.mkdir(out_dir_final);
+    -- paths.mkdir(out_dir_images_blur);
     
     
-    local out_file_net=paths.concat(out_dir_final,'model_all_final.dat');
-    local out_file_loss=paths.concat(out_dir_final,'loss_final.npy');
-    local out_file_loss_val=paths.concat(out_dir_final,'loss_final_val.npy');
+    -- local out_file_net=paths.concat(out_dir_final,'model_all_final.dat');
+    -- local out_file_loss=paths.concat(out_dir_final,'loss_final.npy');
+    -- local out_file_loss_val=paths.concat(out_dir_final,'loss_final_val.npy');
     
-    local out_file_intermediate_pre = paths.concat(out_dir_intermediate,'model_all_');
-    local out_file_loss_intermediate_pre = paths.concat(out_dir_intermediate,'loss_all_');
+    -- local out_file_intermediate_pre = paths.concat(out_dir_intermediate,'model_all_');
+    -- local out_file_loss_intermediate_pre = paths.concat(out_dir_intermediate,'loss_all_');
 
-    local out_file_loss_plot=paths.concat(out_dir_intermediate,'loss_all.png');
-    local out_file_log=paths.concat(out_dir_intermediate,'log.txt');
+    -- local out_file_loss_plot=paths.concat(out_dir_intermediate,'loss_all.png');
+    local out_file_log=paths.concat(out_dir,'log_test.txt');
     local logger=torch.DiskFile(out_file_log,'w');
 
     logger:writeString(dump.tostring(params)..'\n');
@@ -141,7 +142,7 @@ function main(params)
     net_gb:evaluate();
 
     local hist_tables={};
-    for exp_num=1,7 do
+    for exp_num=1,8 do
     	hist_tables[exp_num]=torch.zeros(51,2);
     end
     local num_done=0;
@@ -205,10 +206,13 @@ function main(params)
     for exp_num=1,#hist_tables do
     	local out_file=paths.concat(out_dir_images_blur,'exp_num_'..(exp_num-1)..'.jpg');
     	local hist_curr=hist_tables[exp_num];
+    	local out_file_npy=paths.concat(out_dir_images_blur,'exp_num_'..(exp_num-1)..'.npy');
+    	npy4th.savenpy(out_file_npy, hist_curr)
     	-- print (hist_curr:size(),hist_curr[{{},1}]:size(),hist_curr[{{},2}]:size())
     	local avg_vals=torch.totable(torch.cdiv(hist_curr[{{},1}],hist_curr[{{},2}]));
     	local index=torch.totable(torch.range(0,hist_curr:size(1)-1));
     	visualize:plotLossFigure(avg_vals,index,{},{},out_file);
+    	
     end
 
 	collectgarbage();
@@ -278,5 +282,7 @@ cmd:option('-twoClass',false);
 cmd:option('-onlyLast',false);
 cmd:option('-lower',false);
 
+params = cmd:parse(arg)
+cmd:option('-outDirTest',paths.concat(params.outDir,'test_images_localization'));
 params = cmd:parse(arg)
 main(params);

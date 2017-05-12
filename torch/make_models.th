@@ -88,6 +88,37 @@ function createBaseKhorramiModel(out_file,num_out)
 
 end
 
+function createAdditionalConvKhorramiModel(out_file,num_out)
+    local model=nn.Sequential();
+    model:add(nn.SpatialConvolution(1,32,11,11,1,1,5,5));
+    model:add(nn.ReLU());
+    model:add(nn.SpatialMaxPooling(2,2));
+    model:add(nn.SpatialConvolution(32,32,5,5));
+    model:add(nn.ReLU());
+    model:add(nn.SpatialMaxPooling(2,2));
+    model:add(nn.SpatialConvolution(32,128,5,5));
+    model:add(nn.ReLU());
+    model:add(nn.SpatialMaxPooling(2,2));
+    model:add(nn.SpatialConvolution(128,256,5,5));
+    model:add(nn.ReLU());
+    model:add(nn.SpatialAveragePooling(2,2));
+    model:add(nn.View(16*16*256));
+    model:add(nn.Linear(16*16*256,300));
+    model:add(nn.Dropout(0.5));
+    model:add(nn.Linear(300,num_out));
+    model:add(nn.LogSoftMax());
+    model=makeXavierGaussian(model);
+    print (model)
+    local inputs=torch.zeros(10,1,192,192);
+
+    local out=model:forward(inputs);
+    print (out:size());
+    
+    model:clearState();
+    torch.save(out_file,model);
+
+end
+
 function createFineTuneModelKhorrami(in_file,out_file,num_out)
     local model=torch.load(in_file);
     local model_new=nn.Sequential();
@@ -104,12 +135,18 @@ function createFineTuneModelKhorrami(in_file,out_file,num_out)
 end
 
 function main()
-    num_out=2;
-    in_file='../experiments/khorrami_ck_rerun/0/final/model_all_final.dat';
-    out_file='../models/ck_khorrami_model_forFT_'..num_out..'.dat';
+    num_out=8;
+    out_file='../models/khorrami_bigger_'..num_out..'.dat'
+    createAdditionalConvKhorramiModel(out_file,num_out);
+
+    -- num_out=2;
+    -- in_file='../experiments/khorrami_ck_rerun/0/final/model_all_final.dat';
+    -- out_file='../models/ck_khorrami_model_forFT_'..num_out..'.dat';
     
-    createFineTuneModelKhorrami(in_file,out_file,num_out)
-	-- local num_out=2;
+    -- createFineTuneModelKhorrami(in_file,out_file,num_out)
+	
+
+    -- local num_out=2;
 	-- local out_file='../models/base_khorrami_model_'..num_out..'.dat'
 	-- createBaseKhorramiModel(out_file,num_out);
 	-- local model=torch.load(out_file);

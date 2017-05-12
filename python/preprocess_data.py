@@ -46,10 +46,17 @@ def saveCroppedFace(in_file,out_file,im_size=None,classifier_path=None,savegray=
 def saveCKresizeImages():
     anno_file='../data/ck_original/anno_all.txt';
     
-    dir_meta=os.path.join(dir_server,'expression_project/data/ck_96');
+    # dir_meta=os.path.join(dir_server,'expression_project/data/ck_96');
+    # out_file_html=os.path.join(dir_meta,'check_face.html');
+    # replace=False
+    # im_size=[96,96];
+    # out_dir_meta_meta='../data/ck_'+str(im_size[0])
+
+
+    dir_meta=os.path.join(dir_server,'expression_project/data/ck_192');
     out_file_html=os.path.join(dir_meta,'check_face.html');
     replace=False
-    im_size=[96,96];
+    im_size=[192,192];
     out_dir_meta_meta='../data/ck_'+str(im_size[0])
 
     out_dir_meta=os.path.join(out_dir_meta_meta,'im');
@@ -129,7 +136,12 @@ def splitCKNeutralEmotion():
 
 def makeCKTrainTestFolds():
     anno_file='../data/ck_96/anno_all.txt'
-    out_dir='../data/ck_96/train_test_files';
+    # out_dir='../data/ck_96/train_test_files';
+    # replace=None;
+    
+    out_dir='../data/ck_192/train_test_files';
+    replace=['ck_96','ck_192'];
+
     util.mkdir(out_dir);
     step_size=10;
     num_folds=10;
@@ -137,6 +149,8 @@ def makeCKTrainTestFolds():
     test_pre=os.path.join(out_dir,'test_');
 
     anno_data=util.readLinesFromFile(anno_file);
+    if replace is not None:
+        anno_data=[line_curr.replace(replace[0],replace[1]) for line_curr in anno_data];
     im_files=[file_curr.split(' ')[0] for file_curr in anno_data];
     subjects_all=[os.path.split(file_curr)[1].split('_')[0] for file_curr in im_files]
 
@@ -882,11 +896,19 @@ def combineTFDCkFiles():
     util.writeFile(out_file,lines_all);
     
 def main(args):
-    data_dir='../data/karina_vids/data_unprocessed/test_train_images';
-    train_pre='train_';
-    num_folds=6;
+    # makeCKTrainTestFolds();
+    # saveCKresizeImages();
 
-    saveCKMeanSTDImages(data_dir,train_pre,resize_size=None,num_folds=num_folds)
+    # data_dir='../data/karina_vids/data_unprocessed/test_train_images';
+    # train_pre='train_';
+    # num_folds=6;
+
+    data_dir='../data/ck_192/train_test_files';
+    train_pre='train_';
+    num_folds=10;
+
+    saveCKMeanSTDImages(data_dir,train_pre,resize_size=[192,192],num_folds=num_folds)
+
     # combineTFDCkFiles();
 
     # modifyTFDClassesForCK();

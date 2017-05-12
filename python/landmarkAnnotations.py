@@ -153,6 +153,11 @@ def writeTrainTestFilesWithAnno_TFD_51():
 	# /test_4.txt';
 	in_file_pre='4';
 
+	data_dir='../data/ck_96/train_test_files';
+	# /test_4.txt';
+	in_file_pre='6';
+
+
 	file_list=[os.path.join(data_dir,file_pre+'_'+in_file_pre+'.txt') for file_pre in ['train','test']];
 	new_files=[os.path.join(data_dir,file_pre+'_'+in_file_pre+'_withAnno.txt') for file_pre in ['train','test']];
 	
@@ -178,7 +183,8 @@ def writeTrainTestFilesWithAnno_TFD_51():
 		print out_file;
 
 def main():
-
+	writeTrainTestFilesWithAnno_TFD_51()
+	return
 	predictor_file='../../dlib-19.4.0/python_examples/shape_predictor_68_face_landmarks.dat';
 	out_dir=os.path.join(dir_server,'expression_project','scratch','tfd_4_anno');
 	util.mkdir(out_dir);

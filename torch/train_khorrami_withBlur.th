@@ -67,6 +67,11 @@ function doTheUpdate(td,net,criterion,parameters,gradParameters,optimMethod,opti
         batch_targets=td.training_set.label;
     else
         td:getTrainingData();
+        -- if td.training_set.data:type()~='torch.CudaTensor' then
+        --     print ('cudaing');
+        --     td.training_set.data=td.training_set.data:cuda();
+        --     td.training_set.label=td.training_set.label:cuda();
+        -- end
         batch_inputs=td.training_set.data:cuda();
         batch_targets=td.training_set.label:cuda();
     end
@@ -158,7 +163,8 @@ function test(params)
                     net=net:clone(),
                     net_gb=net_gb:clone(),
                     optimize=params.optimize,
-                    twoClass=params.twoClass
+                    twoClass=params.twoClass,
+                    input_size={params.input_size,params.input_size}
                     };
 
 
@@ -186,8 +192,12 @@ function test(params)
         -- vd:buildBlurryBatch(params.layer_to_viz,0.0,'ncl',out_file_pre,true);
             -- ,true)
         vd:getTrainingData();
+        
+
         vd.training_set.data=vd.training_set.data:cuda();
         vd.training_set.label=vd.training_set.label:cuda();
+        
+
         local batch_inputs=vd.training_set.data;
         local batch_targets=vd.training_set.label;
 
@@ -384,9 +394,15 @@ function main(params)
 
     logger:writeString(dump.tostring('making net_gb')..'\n');
     print ('making net_gb');
-    local net_gb= net:clone();
-    net_gb:replace(utils.guidedbackprop);
-    net_gb = net_gb:cuda();
+    local net_gb=nil
+    local net_gb_clone=nil;
+    if params.incrementDifficultyAfter>=0 then
+        net_gb= net:clone();
+        net_gb:replace(utils.guidedbackprop);
+        net_gb = net_gb:cuda();
+        net_gb_clone=net_gb:clone();
+    end
+
     logger:writeString(dump.tostring('done')..'\n');
     print ('done');
 
@@ -432,7 +448,7 @@ function main(params)
         print ('num_inc,activationThresh_increment',num_inc,activationThresh_increment);    
     end
 
-    
+
     local data_params={file_path=data_path,
 					batch_size=params.batchSize,
 					mean_file=params.mean_im_path,
@@ -443,9 +459,10 @@ function main(params)
                     activation_upper=activation_upper,
                     conv_size=params.conv_size,
                     net=net:clone(),
-                    net_gb=net_gb:clone(),
+                    net_gb=net_gb_clone,
                     optimize=params.optimize,
-                    twoClass=params.twoClass
+                    twoClass=params.twoClass,
+                    input_size={params.input_size,params.input_size}
                     };
 
 	local td=data_face(data_params);
@@ -457,7 +474,8 @@ function main(params)
                     std_file=params.std_im_path,
                     augmentation=false,
                     limit=params.limit,
-                    twoClass=params.twoClass};
+                    twoClass=params.twoClass,
+                    input_size={params.input_size,params.input_size}};
     	vd=data_face(data_params);
 	end
 
@@ -697,6 +715,7 @@ cmd:option('-modelTest',paths.concat(temp,'final/model_all_final.dat'));
 cmd:option('-twoClass',false);
 cmd:option('-onlyLast',false);
 cmd:option('-lower',false);
+cmd:option('-input_size',96);
 
 params = cmd:parse(arg)
 -- main(params);    

@@ -36,11 +36,16 @@ def writeBlurScript(\
     mean_im_path=None,
     std_im_path=None,
     onlyLast=False,
-    lower=False
+    lower=False,
+    input_size=None,
+    withAnno=False
     ):
     data_path=os.path.join(dir_files,'train_'+str(fold_num)+'.txt');
     if val_data_path is None:
-        val_data_path=os.path.join(dir_files,'test_'+str(fold_num)+'.txt');
+        if withAnno:
+            val_data_path=os.path.join(dir_files,'test_'+str(fold_num)+'_withAnno.txt');
+        else:
+            val_data_path=os.path.join(dir_files,'test_'+str(fold_num)+'.txt');
     if mean_im_path is None:
         mean_im_path=os.path.join(dir_files,'train_'+str(fold_num)+'_mean.png');
     if std_im_path is None:
@@ -101,6 +106,9 @@ def writeBlurScript(\
 
     if lower:
         command = command+['-lower'];
+
+    if input_size is not None:
+        command = command+['-input_size',input_size];        
 
     command = [str(c_curr) for c_curr in command];
     command=' '.join(command);
@@ -615,22 +623,24 @@ def writeScriptSchemesFixThresh():
     # dir_exp_old='../experiments/noBlur_meanFirst_pixel_augment/noBlur_meanFirst_7out';
     # folds_range=[4];
     # epoch_starts=range(500,0,-100);
-    # schemes=['mix']
+    
     # model_file='../models/base_khorrami_model_7.dat'
     # experiment_name='tfd_meanBlur_fixThresh_100_inc';
-    # num_scripts=2;
+    # num_scripts=1;
     
 
     startingActivation=0.05;
     fixThresh=0.05;
     activationThreshMax=0.5;
-    schemes=['mix'];
-    path_to_th='train_khorrami_withBlur.th';
+    schemes=['ncl','mixcl','mix'];
+    # path_to_th='train_khorrami_withBlur.th';withAnno=False;
+    path_to_th='test_localization.th';withAnno=True;
+    
 
     epoch_starts=range(100,600,100);
     out_dir_meta_meta='../experiments/'+experiment_name;
     util.mkdir(out_dir_meta_meta);
-    out_script='../scripts/train_'+experiment_name+'_mix';
+    out_script='../scripts/train_'+experiment_name+'_loc';
     
     # batchSizeTest=128;
     batchSize=128;
@@ -661,7 +671,7 @@ def writeScriptSchemesFixThresh():
                                             startingActivation=0,
                                             fixThresh=fixThresh,
                                             activationThreshMax=activationThreshMax,
-                                            iterations=1000)
+                                            iterations=1000,withAnno=withAnno)
                 else:
                     resume_model=os.path.join(dir_exp_old,str(fold_num),'intermediate','model_all_'+str(epoch_start*epoch_size)+'.dat');
                     assert(os.path.exists(resume_model));
@@ -674,7 +684,7 @@ def writeScriptSchemesFixThresh():
                                             startingActivation=startingActivation,
                                             fixThresh=fixThresh,
                                             activationThreshMax=activationThreshMax,
-                                            iterations=1000-epoch_start)
+                                            iterations=1000-epoch_start,withAnno=withAnno)
                 
                 commands.append(command);
 
@@ -698,15 +708,15 @@ def writeScriptSchemesAutoThresh():
     experiment_name='ck_meanBlur_autoThresh_100_inc';
     folds_range=[6];
 
-    dir_exp_old='../experiments/noBlur_meanFirst_pixel_augment/noBlur_meanFirst_7out';
-    dir_files='../data/tfd/train_test_files';
-    experiment_name='tfd_meanBlur_autoThresh_100_inc';
-    folds_range=[4];
+    # dir_exp_old='../experiments/noBlur_meanFirst_pixel_augment/noBlur_meanFirst_7out';
+    # dir_files='../data/tfd/train_test_files';
+    # experiment_name='tfd_meanBlur_autoThresh_100_inc';
+    # folds_range=[4];
 
     out_dir_meta_meta='../experiments/'+experiment_name;
     util.mkdir(out_dir_meta_meta);
-    out_script='../scripts/train_'+experiment_name;
-    num_scripts=2;
+    out_script='../scripts/train_'+experiment_name+'_loc';
+    num_scripts=1;
     
 
     util.mkdir(out_dir_meta_meta);
@@ -722,7 +732,8 @@ def writeScriptSchemesAutoThresh():
     # epoch_starts=[[100,200,300,400,500],[100,200,300,400,500]];
     # ,'mix'];
     # schemes=['mix'];
-    path_to_th='train_khorrami_withBlur.th';
+    path_to_th='train_khorrami_withBlur.th';withAnno=False;
+    path_to_th='test_localization.th';withAnno=True;
 
     
     
@@ -776,7 +787,7 @@ def writeScriptSchemesAutoThresh():
                                         startingActivation=startingActivation,
                                         fixThresh=0,
                                         activationThreshMax=activationThreshMax,
-                                        iterations=total_epochs-epoch_start)
+                                        iterations=total_epochs-epoch_start,withAnno=withAnno)
                 
                 commands.append(command);
 
@@ -1025,13 +1036,15 @@ def writeScriptTFDTestsDiffSchemes():
     # schemes=['mixcl','ncl'];
     incs=[str(num) for num in range(100,600,100)];
 
-    out_dir_metas=[os.path.join(out_dir_meta_meta,dir_curr) for dir_curr in ['ck_meanBlur_fixThresh_100_inc']];
-    schemes=['bl'];
+    out_dir_metas=[os.path.join(out_dir_meta_meta,dir_curr) for dir_curr in ['ck_meanBlur_autoThresh_100_inc']];
+    out_results=os.path.join(out_dir_meta_meta,'ck_testing_tfd_4_auto');
+    # schemes=['bl'];
+    schemes=['ncl','mixcl'];
     num_scripts=1;
-    incs=['None']
+    # incs=['None']
     
 
-    test_file='../data/tfd/train_test_files/test_ckLabels_all.txt';
+    test_file='../data/tfd/train_test_files/test_ckLabels_4.txt';
     data_dir='../data/tfd/train_test_files';
     num_fold=6;
     
@@ -1041,16 +1054,20 @@ def writeScriptTFDTestsDiffSchemes():
 
     models=[os.path.join(out_dir_meta_curr,scheme_curr,str(num_fold),'final','model_all_final.dat') for out_dir_meta_curr in out_dir_metas for scheme_curr in schemes];
     
+    
+    util.mkdir(out_results);
+    
     commands=[];
     for out_dir_meta in out_dir_metas:
         for scheme in schemes:
             for epoch_num in incs:
-                out_dir_curr=os.path.join(out_dir_meta,'results_tfd',scheme,epoch_num);
+                out_dir_curr=os.path.join(out_results,scheme,epoch_num);
                 util.makedirs(out_dir_curr)
                 if epoch_num is not 'None':
                     model_curr=os.path.join(out_dir_meta,scheme,epoch_num,str(num_fold),'final','model_all_final.dat');
                 else:
                     model_curr=os.path.join(out_dir_meta,scheme,str(num_fold),'final','model_all_final.dat');
+                print model_curr
                 assert (os.path.exists(model_curr))
                 command_curr=writeBlurScript(path_to_th,out_dir_curr,data_dir,0,val_data_path=test_file,modelTest=model_curr);
                 commands.append(command_curr);
@@ -1070,8 +1087,39 @@ def writeScriptTFDTestsDiffSchemes():
 
 
 def main():
+    
+    writeScriptTFDTestsDiffSchemes();
     # writeScriptSchemesAutoThresh();
-    printTestAccuracy();
+    # writeScriptSchemesFixThresh();
+    return
+    num_folds=10;
+    dir_files='../data/ck_192/train_test_files';
+    input_size=192;
+    experiment_name='khorrami_large_ck'
+    path_to_th='train_khorrami_withBlur.th';
+    model_file='../models/khorrami_bigger_8.dat'
+    num_scripts=2;
+
+    out_dir_meta='../experiments/'+experiment_name;
+    out_script=os.path.join('../scripts','train_'+experiment_name);
+    util.mkdir(out_dir_meta);
+    
+    commands=[];
+    for fold_num in range(num_folds):
+        command=writeBlurScript(path_to_th,out_dir_meta,dir_files,fold_num,input_size=input_size,model_file=model_file);
+        commands.append(command)
+
+    len(commands)
+    commands=np.array(commands);
+    commands_split=np.array_split(commands,num_scripts);
+    for idx_commands,commands in enumerate(commands_split):
+        out_file_script_curr=out_script+'_'+str(idx_commands)+'.sh';
+        print idx_commands,out_file_script_curr,len(commands)
+        # print commands;
+        util.writeFile(out_file_script_curr,commands);
+    
+    # writeScriptSchemesAutoThresh();
+    # printTestAccuracy();
 
     # writeScriptSchemesFixThresh()
     # writeScriptTFDTestsDiffSchemes()

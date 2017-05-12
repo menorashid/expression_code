@@ -15,7 +15,6 @@ do
 
         self.start_idx_face=1;
         self.input_size={96,96};
-
         
         self.angles={-5,5};
         self.pixel_augment={0.5,1.5};
@@ -82,6 +81,7 @@ do
 
 
     function data:loadTrainingImages()
+        print ('self.input_size',self.input_size);
         local im_all=torch.zeros(#self.lines_face,1,self.input_size[1]
             ,self.input_size[2]);
         local labels = torch.zeros(#self.lines_face);
@@ -483,9 +483,13 @@ do
         
         local start_idx_face_before = self.start_idx_face
         
-        self.training_set.data=torch.zeros(self.batch_size,1,self.input_size[1]
+        -- if not self.training_set.data then
+            self.training_set.data=torch.zeros(self.batch_size,1,self.input_size[1]
             ,self.input_size[2]);
-        self.training_set.label=torch.zeros(self.batch_size);
+        -- end
+        -- if not self.training_set.label then
+            self.training_set.label=torch.zeros(self.batch_size);
+        -- end
         self.training_set.input={};
         
         self.start_idx_face=self:addTrainingData(self.training_set,self.batch_size,self.start_idx_face)    
