@@ -1,3 +1,4 @@
+
 import matplotlib
 import numpy as np;
 matplotlib.use('Agg')
@@ -204,8 +205,9 @@ def plotSimple(xAndYs,out_file,title='',xlabel='',ylabel='',legend_entries=None,
             lgd=plt.legend(handles,legend_entries,loc=loc)    
 
     if xticks is not None:
-        ax = plt.gca()
-        ax.set_xticks(xticks)
+        plt.xticks(x,xticks);
+        # ax = plt.gca()
+        # ax.set_xticks(xticks)
 
     if legend_entries is not None:
         plt.savefig(out_file,bbox_extra_artists=(lgd,), bbox_inches='tight')

@@ -880,6 +880,43 @@ def modifyTFDClassesForCK():
         print out_file;
         util.writeFile(out_file,lines_new);
 
+def modifyCKClassesForTFD():
+
+    data_dir='../data/ck_96/train_test_files';
+    in_pre='test_';
+    out_pre='test_tfdLabels_';
+    out_file_all=os.path.join(data_dir,out_pre+'all.txt');
+    num_folds=10;
+    lines_all=[];
+    for num_fold in range(num_folds):
+        in_file=os.path.join(data_dir,in_pre+str(num_fold)+'.txt');
+        out_file=os.path.join(data_dir,out_pre+str(num_fold)+'.txt');
+        lines=util.readLinesFromFile(in_file);
+        lines_new=[];
+        for line_curr in lines:
+            line_curr=line_curr.split(' ');
+            label=int(line_curr[1]);
+            if label==0:
+                label=6;
+            elif label==1:
+                label=0;
+            elif label==2:
+                continue;
+            else:
+                label=label-2;
+            line_curr=line_curr[0]+' '+str(label);
+            lines_new.append(line_curr);
+        print out_file,len(lines),len(lines_new);
+        util.writeFile(out_file,lines_new);
+        lines_all=lines_all+lines_new;
+
+    print len(lines_all);
+    lines_all=list(set(lines_all));
+    print len(lines_all);
+    util.writeFile(out_file_all,lines_all)
+
+
+
 def combineTFDCkFiles():
     num_folds=5;
     dir_data='../data/tfd/train_test_files';
@@ -896,6 +933,7 @@ def combineTFDCkFiles():
     util.writeFile(out_file,lines_all);
     
 def main(args):
+    modifyCKClassesForTFD();
     # makeCKTrainTestFolds();
     # saveCKresizeImages();
 
@@ -903,11 +941,11 @@ def main(args):
     # train_pre='train_';
     # num_folds=6;
 
-    data_dir='../data/ck_192/train_test_files';
-    train_pre='train_';
-    num_folds=10;
+    # data_dir='../data/ck_192/train_test_files';
+    # train_pre='train_';
+    # num_folds=10;
 
-    saveCKMeanSTDImages(data_dir,train_pre,resize_size=[192,192],num_folds=num_folds)
+    # saveCKMeanSTDImages(data_dir,train_pre,resize_size=[192,192],num_folds=num_folds)
 
     # combineTFDCkFiles();
 

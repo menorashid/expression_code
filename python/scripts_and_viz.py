@@ -1034,22 +1034,43 @@ def writeScriptTFDTestsDiffSchemes():
     out_dir_meta_meta='../experiments';
     # out_dir_metas=[os.path.join(out_dir_meta_meta,dir_curr) for dir_curr in ['ck_meanBlur_fixThresh_100_inc','ck_meanBlur_autoThresh_100_inc']];
     # schemes=['mixcl','ncl'];
-    incs=[str(num) for num in range(100,600,100)];
+    # incs=[str(num) for num in range(100,600,100)];
+    # meta_dirs=['ck_meanBlur_autoThresh_100_inc']
+    # out_results=os.path.join(out_dir_meta_meta,'ck_testing_tfd_4_auto');
+    # schemes=['ncl','mixcl'];
+    # num_scripts=1;
 
-    out_dir_metas=[os.path.join(out_dir_meta_meta,dir_curr) for dir_curr in ['ck_meanBlur_autoThresh_100_inc']];
-    out_results=os.path.join(out_dir_meta_meta,'ck_testing_tfd_4_auto');
-    # schemes=['bl'];
-    schemes=['ncl','mixcl'];
+    # test_file='../data/tfd/train_test_files/test_ckLabels_4.txt';
+    # data_dir='../data/tfd/train_test_files';
+    # num_fold=6;    
+    # out_script='../scripts/test_tfd_ck_scheme';
+
+    # incs=[str(num) for num in [100,200,400,500]];
+    # meta_dirs=['tfd_meanBlur_autoThresh_100_inc']
+    # out_results=os.path.join(out_dir_meta_meta,'tfd_testing_ck_all_auto');
+    # schemes=['ncl','mixcl'];
+
+    # incs=[str(num) for num in range(100,600,100)];
+    # meta_dirs=['tfd_meanBlur_fixThresh_100_inc']
+    # out_results=os.path.join(out_dir_meta_meta,'tfd_testing_ck_all_fix');
+    # schemes=['ncl','mixcl','mix'];
+
+    incs=['None'];
+    meta_dirs=['tfd_meanBlur_fixThresh_100_inc']
+    out_results=os.path.join(out_dir_meta_meta,'tfd_testing_ck_all_fix');
+    schemes=['bl'];
+    
     num_scripts=1;
-    # incs=['None']
-    
 
-    test_file='../data/tfd/train_test_files/test_ckLabels_4.txt';
-    data_dir='../data/tfd/train_test_files';
-    num_fold=6;
-    
-    out_script='../scripts/test_tfd_ck_scheme';
+    data_dir='../data/ck_96/train_test_files';
+    num_fold=4;    
+    test_file=os.path.join(data_dir,'test_tfdLabels_all.txt');
+    out_script='../scripts/test_ck_tfd_scheme';
 
+
+
+    out_dir_metas=[os.path.join(out_dir_meta_meta,dir_curr) for dir_curr in meta_dirs];
+    
     path_to_th='train_khorrami_withBlur.th';
 
     models=[os.path.join(out_dir_meta_curr,scheme_curr,str(num_fold),'final','model_all_final.dat') for out_dir_meta_curr in out_dir_metas for scheme_curr in schemes];
@@ -1088,6 +1109,48 @@ def writeScriptTFDTestsDiffSchemes():
 
 def main():
     
+    dir_meta_meta='../experiments'
+    dir_metas=['ck_testing_tfd_4_auto','ck_testing_tfd_4','ck_testing_tfd_4'];
+    schemes=[['mixcl','ncl'],['mixcl','ncl','mix'],['bl']]
+    inc_ranges=[range(100,600,100),range(100,600,100),['None']]
+    
+
+    # dir_meta_meta='../experiments'
+    # dir_metas=['tfd_testing_ck_all_auto','tfd_testing_ck_all_fix','tfd_testing_ck_all_fix'];
+    # schemes=[['mixcl','ncl'],['mixcl','ncl','mix'],['bl']]
+    # inc_ranges=[[100,200,400,500],range(100,600,100),['None']]
+    
+    num_fold=0;
+    # ,'mix'];
+    
+
+    # dir_meta='../experiments/tfd_meanBlur_fixThresh_100_inc';
+    # schemes=['mixcl','ncl','mix'];
+    # inc_range=range(100,600,100);
+    # dir_meta='../experiments/tfd_meanBlur_autoThresh_100_inc';
+    # schemes=['mixcl','ncl'];
+    # inc_range=[100,200,400,500];
+    # schemes=['mix'];
+    
+    # num_fold=4;
+    for dir_meta_curr,schemes,inc_range in zip(dir_metas,schemes,inc_ranges):
+        dir_meta=os.path.join(dir_meta_meta,dir_meta_curr);
+        print dir_meta;
+        for scheme in schemes:
+            for inc in inc_range:
+                file_curr=os.path.join(dir_meta,scheme,str(inc),str(num_fold),'test_images','log_test.txt');
+                lines=util.readLinesFromFile(file_curr);
+                accu=lines[-1].split(':')[-1];
+
+                # file_log=os.path.join(dir_meta,scheme,str(inc),str(num_fold),'intermediate','log.txt');
+                # log_lines=util.readLinesFromFile(file_log)
+                # print log_lines[-2].split('at: ')[1][:6];
+                
+                # print file_curr
+                print accu[1:6];
+                # print '\t'.join([scheme,str(inc),'x',accu[1:6]]);
+
+    return
     writeScriptTFDTestsDiffSchemes();
     # writeScriptSchemesAutoThresh();
     # writeScriptSchemesFixThresh();

@@ -182,8 +182,98 @@ def writeTrainTestFilesWithAnno_TFD_51():
 		util.writeFile(out_file,lines_new);
 		print out_file;
 
+def makeRegionGraphs(in_file,out_file_pre,expression):
+	hist_curr=np.load(in_file);
+	# print hist_curr,in_file;
+	vals_all=hist_curr[:,0]/hist_curr[:,1];
+	out_mouth=[31,32,42,33,41,34,40,35,39,36,38,37];
+	in_mouth=[43,44,50,45,49,46,48,47];
+	nose=range(10,19);
+	brows=range(10);
+	eyes=[19,20,24,21,23,22,25,26,30,27,29,28];
+	nums=[out_mouth,in_mouth,nose,brows,eyes];
+	names=['out_mouth','in_mouth','nose','brows','eyes'];
+	for area_name,area_num in zip(names,nums):
+		vals=list(vals_all[np.array(area_num)]);
+		out_file=out_file_pre+'_'+area_name+'.jpg';
+		x=range(len(vals));
+		xAndYs=[(x,vals)];
+		title=area_name+' '+expression;
+		xlabel='Keypoint';
+		ylabel='Average Importance'
+		xticks=[str(num) for num in area_num];
+		# print xAndYs,out_file,title,xlabel,ylabel,xticks
+		visualize.plotSimple(xAndYs,out_file,title=title,xlabel=xlabel,ylabel=ylabel,xticks=xticks);
+			# ,xticks=xticks);
+    
+		# visualize.makeBarGraph(out_file,
+
 def main():
-	writeTrainTestFilesWithAnno_TFD_51()
+	
+	
+
+
+	expression_nums=range(8);
+	# expression_nums=[6];expression_names=['sadness'];
+	# range(8);
+	expression_names=['neutral', 'anger','contempt','disgust', 'fear', 'happy', 'sadness', 'surprise'];
+	
+	in_dir_meta=os.path.join(dir_server,'expression_project','experiments/ck_meanBlur_fixThresh_100_inc');
+	# out_file_html=os.path.join(in_dir_meta,'comparison_loc.html');
+	# schemes=['bl','ncl','mixcl','mix'];
+	# incs=['None','300','200','200'];
+	# fold='6';
+	# area_names=['out_mouth','in_mouth','nose','brows','eyes'];
+	# ims_html=[];captions=[];
+	# for exp_num,exp_name in zip(expression_nums,expression_names):
+	# 	for scheme,inc in zip(schemes,incs):
+	# 		im_row_curr=[];
+	# 		caption_row_curr=[];
+	# 		if inc=='None':
+	# 			dir_curr=os.path.join(in_dir_meta,scheme,fold,'test_images_localization')
+	# 		else:
+	# 			dir_curr=os.path.join(in_dir_meta,scheme,inc,fold,'test_images_localization')
+	# 		for area_name in area_names:
+	# 			caption_curr=' '.join([scheme,exp_name,area_name]);
+	# 			im_file=os.path.join(dir_curr,exp_name+'_'+area_name+'.jpg');
+	# 			im_row_curr.append(util.getRelPath(im_file,dir_server));
+	# 			caption_row_curr.append(caption_curr);
+	# 		ims_html.append(im_row_curr);
+	# 		captions.append(caption_row_curr);
+
+	# visualize.writeHTML(out_file_html,ims_html,captions,200,300);
+	# print out_file_html.replace(dir_server,click_str);
+
+	schemes=['mix','mixcl','ncl'];
+	inc_range=[str(num) for num in range(100,600,100)]
+	
+
+	# return
+	# schemes=['bl']
+	# ,'mixcl','ncl'];
+	# inc_range=['None']
+	
+	# '200';
+	
+	fold='6';
+	for scheme in schemes:
+		for inc in inc_range:
+			# dir_curr=os.path.join(in_dir_meta,scheme,fold,'test_images_localization')
+			if inc=='None':
+				dir_curr=os.path.join(in_dir_meta,scheme,fold,'test_images_localization')
+			else:
+				dir_curr=os.path.join(in_dir_meta,scheme,inc,fold,'test_images_localization')
+			for exp_num,exp_name in zip(expression_nums,expression_names):
+				file_curr=os.path.join(dir_curr,'exp_num_'+str(exp_num)+'.npy');
+				out_file_pre=os.path.join(dir_curr,exp_name);
+				makeRegionGraphs(file_curr,out_file_pre,exp_name);
+
+			visualize.writeHTMLForFolder(dir_curr);
+
+
+
+	# writeTrainTestFilesWithAnno_TFD_51()
+
 	return
 	predictor_file='../../dlib-19.4.0/python_examples/shape_predictor_68_face_landmarks.dat';
 	out_dir=os.path.join(dir_server,'expression_project','scratch','tfd_4_anno');

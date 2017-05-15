@@ -15,7 +15,7 @@ function updateExpressionHists(gcam_gt,annos,batch_targets,indices,hist_tables)
 	for im_num=1,gcam_gt:size(1) do	
 		local class_gt=batch_targets[im_num];
 
-		if class_gt==indices[im_num] then
+		-- if class_gt==indices[im_num] then
 	    	local hist_curr=hist_tables[class_gt];
 	    	local anno_curr=annos[im_num];
 	    	-- local counts=hist_tables[class_gt][2];
@@ -29,7 +29,7 @@ function updateExpressionHists(gcam_gt,annos,batch_targets,indices,hist_tables)
     				hist_curr[anno_num][2]=hist_curr[anno_num][2]+1;
     			end
     		end
-    	end
+    	-- end
     end
 end
 
