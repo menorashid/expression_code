@@ -33,6 +33,21 @@ function updateExpressionHists(gcam_gt,annos,batch_targets,indices,hist_tables)
     end
 end
 
+function updateExpressionMaps(gcam_gt,batch_targets,expression_maps,expression_counts)
+	for im_num=1,gcam_gt:size(1) do	
+		local class_gt=batch_targets[im_num];
+		local hist_curr=expression_maps[class_gt];
+		-- print (gcam_gt[im_num][1])
+		-- print (hist_curr)
+		hist_curr=hist_curr+gcam_gt[im_num]:type(hist_curr:type());
+		expression_maps[class_gt]=hist_curr;
+		expression_counts[class_gt]=expression_counts[class_gt]+1;
+			-- hist_tables[class_gt];
+	    	
+    	-- end
+    end
+end
+
 function main(params) 
     print ('setting_threads');
     torch.setnumthreads(1);
@@ -141,10 +156,22 @@ function main(params)
     net:evaluate();
     net_gb:evaluate();
 
+    -- print (net:get(#net).bias:size(1))
+
+    local num_exp=net:get(#net).bias:size(1)
     local hist_tables={};
-    for exp_num=1,8 do
+    for exp_num=1,num_exp do
     	hist_tables[exp_num]=torch.zeros(51,2);
     end
+	
+	local expression_maps={};
+	local expression_counts={};
+	for exp_num=1,num_exp do
+    	expression_maps[exp_num]=torch.zeros(1,96,96);
+    	expression_counts[exp_num]=0;
+    end
+        
+
     local num_done=0;
     for i=1,params.iterationsTest do
     	local bool=true
@@ -153,6 +180,7 @@ function main(params)
         -- vd:getTrainingData();
         -- print (vd.training_set.anno[10]);
         local gcam_gt = vd:getPointImportance(params.layer_to_viz,false);
+        -- print ('gcam_gt:size()',gcam_gt:size())
         num_done=num_done+gcam_gt:size(1);
         
 
@@ -193,6 +221,8 @@ function main(params)
         
         -- print (num_done,#vd.lines_face,batch_targets:size(1),indices:size(1),gcam_gt:size(1))
     	updateExpressionHists(gcam_gt,vd.training_set.anno,batch_targets,indices,hist_tables)
+    	-- updateExpressionHists(gcam_gt,vd.training_set.anno,batch_targets,indices,hist_tables)
+    	updateExpressionMaps(gcam_gt,batch_targets,expression_maps,expression_counts)
 
         disp_str=string.format("minibatches processed: %6s, val loss = %6.6f", i, val_losses[#val_losses])
         logger:writeString(dump.tostring(disp_str)..'\n');
@@ -208,6 +238,15 @@ function main(params)
     	local hist_curr=hist_tables[exp_num];
     	local out_file_npy=paths.concat(out_dir_images_blur,'exp_num_'..(exp_num-1)..'.npy');
     	npy4th.savenpy(out_file_npy, hist_curr)
+
+    	local out_file_map=paths.concat(out_dir_images_blur,'exp_num_map_'..(exp_num-1)..'.jpg');
+    	local out_file_map_npy=paths.concat(out_dir_images_blur,'exp_num_map_'..(exp_num-1)..'.npy');
+    	local map_curr=expression_maps[exp_num]/expression_counts[exp_num];
+    	-- print (torch.min(map_curr),torch.max(map_curr));
+    	local map_curr = utils.to_heatmap(map_curr:float())
+    	image.save(out_file_map, image.toDisplayTensor(map_curr))
+    	npy4th.savenpy(out_file_map_npy,map_curr);
+
     	-- print (hist_curr:size(),hist_curr[{{},1}]:size(),hist_curr[{{},2}]:size())
     	local avg_vals=torch.totable(torch.cdiv(hist_curr[{{},1}],hist_curr[{{},2}]));
     	local index=torch.totable(torch.range(0,hist_curr:size(1)-1));

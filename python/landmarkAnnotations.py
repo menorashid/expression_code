@@ -144,27 +144,15 @@ def writeTrainScript():
 	command = scripts_and_viz.writeBlurScript(path_to_th,out_dir_meta,dir_files,fold_num,model_file=model_file,twoClass=twoClass,iterations=iterations,saveAfter=saveAfter,learningRate=learningRate,testAfter=testAfter);
 	print command;
 
-def writeTrainTestFilesWithAnno_TFD_51():
-	predictor_file='../../dlib-19.4.0/python_examples/shape_predictor_68_face_landmarks.dat';
-	out_dir=os.path.join(dir_server,'expression_project','scratch','tfd_4_anno');
-	util.mkdir(out_dir);
+def writeAnnoFile(file_list,new_files,detector_file=None,predictor_file=None,range_keep=range(17,68)):
+	if detector_file is None:
+		detector=None;
+	if predictor_file is None:
+		predictor_file='../../dlib-19.4.0/python_examples/shape_predictor_68_face_landmarks.dat';
 
-	data_dir='../data/tfd/train_test_files';
-	# /test_4.txt';
-	in_file_pre='4';
-
-	data_dir='../data/ck_96/train_test_files';
-	# /test_4.txt';
-	in_file_pre='6';
-
-
-	file_list=[os.path.join(data_dir,file_pre+'_'+in_file_pre+'.txt') for file_pre in ['train','test']];
-	new_files=[os.path.join(data_dir,file_pre+'_'+in_file_pre+'_withAnno.txt') for file_pre in ['train','test']];
-	
-	detector=None;
 	predictor=dlib.shape_predictor(predictor_file);
 	
-	annos_to_keep=[[num] for num in range(17,68)];
+	annos_to_keep=[[num] for num in range_keep];
 	avg_nums=[[num,num] for num in range(len(annos_to_keep))];
 
 	for data_file,out_file in zip(file_list,new_files):
@@ -182,6 +170,26 @@ def writeTrainTestFilesWithAnno_TFD_51():
 		util.writeFile(out_file,lines_new);
 		print out_file;
 
+
+def writeTrainTestFilesWithAnno_TFD_51():
+	out_dir=os.path.join(dir_server,'expression_project','scratch','tfd_4_anno');
+	util.mkdir(out_dir);
+
+	data_dir='../data/tfd/train_test_files';
+	# /test_4.txt';
+	in_file_pre='4';
+
+	data_dir='../data/ck_96/train_test_files';
+	# /test_4.txt';
+	in_file_pre='6';
+
+
+	file_list=[os.path.join(data_dir,file_pre+'_'+in_file_pre+'.txt') for file_pre in ['train','test']];
+	new_files=[os.path.join(data_dir,file_pre+'_'+in_file_pre+'_withAnno.txt') for file_pre in ['train','test']];
+	writeAnnoFile(file_list,new_files)
+	# ,detector_file=None,predictor_file=None,range_keep=range(17,68))
+	
+	
 def makeRegionGraphs(in_file,out_file_pre,expression):
 	hist_curr=np.load(in_file);
 	# print hist_curr,in_file;
@@ -208,42 +216,85 @@ def makeRegionGraphs(in_file,out_file_pre,expression):
     
 		# visualize.makeBarGraph(out_file,
 
-def main():
-	
-	
-
-
+def makeComparativeHtmlAreaGraphs():
 	expression_nums=range(8);
 	# expression_nums=[6];expression_names=['sadness'];
 	# range(8);
 	expression_names=['neutral', 'anger','contempt','disgust', 'fear', 'happy', 'sadness', 'surprise'];
 	
 	in_dir_meta=os.path.join(dir_server,'expression_project','experiments/ck_meanBlur_fixThresh_100_inc');
-	# out_file_html=os.path.join(in_dir_meta,'comparison_loc.html');
-	# schemes=['bl','ncl','mixcl','mix'];
-	# incs=['None','300','200','200'];
+	out_file_html=os.path.join(in_dir_meta,'comparison_loc.html');
+	schemes=['bl','ncl','mixcl','mix'];
+	incs=['None','300','200','200'];
+	fold='6';
+	area_names=['out_mouth','in_mouth','nose','brows','eyes'];
+	ims_html=[];captions=[];
+	for exp_num,exp_name in zip(expression_nums,expression_names):
+		for scheme,inc in zip(schemes,incs):
+			im_row_curr=[];
+			caption_row_curr=[];
+			if inc=='None':
+				dir_curr=os.path.join(in_dir_meta,scheme,fold,'test_images_localization')
+			else:
+				dir_curr=os.path.join(in_dir_meta,scheme,inc,fold,'test_images_localization')
+			for area_name in area_names:
+				caption_curr=' '.join([scheme,exp_name,area_name]);
+				im_file=os.path.join(dir_curr,exp_name+'_'+area_name+'.jpg');
+				im_row_curr.append(util.getRelPath(im_file,dir_server));
+				caption_row_curr.append(caption_curr);
+			ims_html.append(im_row_curr);
+			captions.append(caption_row_curr);
+
+	visualize.writeHTML(out_file_html,ims_html,captions,200,300);
+	print out_file_html.replace(dir_server,click_str);
+
+def makeHTMLForMaps():
+	# in_dir_meta=os.path.join(dir_server,'expression_project','experiments/ck_meanBlur_fixThresh_100_inc');
 	# fold='6';
+	in_dir_meta=os.path.join(dir_server,'expression_project','experiments/ck_testing_tfd_4_fix');
+	fold='0';
+	expression_names=['neutral', 'anger','contempt','disgust', 'fear', 'happy', 'sadness', 'surprise'];
+	expression_nums=range(8);
+	incs=['None','200','200','200'];
+
+	# in_dir_meta=os.path.join(dir_server,'expression_project','experiments/tfd_meanBlur_fixThresh_100_inc');
+	# fold='4';
+	# in_dir_meta=os.path.join(dir_server,'expression_project','experiments/tfd_testing_ck_all_fix');
+	# fold='0';
+	# expression_names=['anger','disgust', 'fear', 'happy', 'sadness', 'surprise','neutral'];
+	# expression_nums=range(7);
+	# incs=['None','300','300','300'];
+
+	out_file_html=os.path.join(in_dir_meta,'comparison_loc.html');
+	schemes=['bl','ncl','mixcl','mix'];
+	
+	
 	# area_names=['out_mouth','in_mouth','nose','brows','eyes'];
-	# ims_html=[];captions=[];
-	# for exp_num,exp_name in zip(expression_nums,expression_names):
-	# 	for scheme,inc in zip(schemes,incs):
-	# 		im_row_curr=[];
-	# 		caption_row_curr=[];
-	# 		if inc=='None':
-	# 			dir_curr=os.path.join(in_dir_meta,scheme,fold,'test_images_localization')
-	# 		else:
-	# 			dir_curr=os.path.join(in_dir_meta,scheme,inc,fold,'test_images_localization')
-	# 		for area_name in area_names:
-	# 			caption_curr=' '.join([scheme,exp_name,area_name]);
-	# 			im_file=os.path.join(dir_curr,exp_name+'_'+area_name+'.jpg');
-	# 			im_row_curr.append(util.getRelPath(im_file,dir_server));
-	# 			caption_row_curr.append(caption_curr);
-	# 		ims_html.append(im_row_curr);
-	# 		captions.append(caption_row_curr);
+	ims_html=[];captions=[];
+	for exp_num,exp_name in zip(expression_nums,expression_names):
+		im_row_curr=[];
+		caption_row_curr=[];
 
-	# visualize.writeHTML(out_file_html,ims_html,captions,200,300);
-	# print out_file_html.replace(dir_server,click_str);
+		for scheme,inc in zip(schemes,incs):
+			# if inc=='None':
+			# 	dir_curr=os.path.join(in_dir_meta,scheme,fold,'test_images_localization')
+			# else:
+			dir_curr=os.path.join(in_dir_meta,scheme,inc,fold,'test_images_localization')
 
+			caption_curr=' '.join([scheme,exp_name]);
+			im_file=os.path.join(dir_curr,'exp_num_map_'+str(exp_num)+'.jpg');
+			im_row_curr.append(util.getRelPath(im_file,dir_server));
+			caption_row_curr.append(caption_curr);
+		ims_html.append(im_row_curr);
+		captions.append(caption_row_curr);
+
+	visualize.writeHTML(out_file_html,ims_html,captions,200,200);
+	print out_file_html.replace(dir_server,click_str);
+
+def script_makeRegionGraphs():
+
+	in_dir_meta=os.path.join(dir_server,'expression_project','experiments/ck_meanBlur_fixThresh_100_inc');
+	
 	schemes=['mix','mixcl','ncl'];
 	inc_range=[str(num) for num in range(100,600,100)]
 	
@@ -270,61 +321,12 @@ def main():
 
 			visualize.writeHTMLForFolder(dir_curr);
 
-
-
-	# writeTrainTestFilesWithAnno_TFD_51()
-
-	return
-	predictor_file='../../dlib-19.4.0/python_examples/shape_predictor_68_face_landmarks.dat';
-	out_dir=os.path.join(dir_server,'expression_project','scratch','tfd_4_anno');
-	util.mkdir(out_dir);
-
-	data_dir='../data/tfd/train_test_files';
-	# /test_4.txt';
-	in_file_pre='4';
-	test_file=os.path.join(data_dir,'test_'+in_file_pre+'.txt');
-
-	lines=util.readLinesFromFile(test_file);	
-	print len(lines);
-	ims=[line_curr.split(' ')[0] for line_curr in lines];
-	
-	out_file_html=os.path.join(out_dir,'num_annos.html')	
-
-	detector=None;
-	predictor=dlib.shape_predictor(predictor_file);
-	
-	im_num=125;
-	im_curr=ims[im_num];	
-
-	annos_to_keep=[num for num in range(17,68)];
-
-	print im_num
-	out_file=os.path.join(out_dir,str(im_num)+'.jpg');
-	annos=getAnnoNumpy(im_curr,detector,predictor);
-	print len(annos)
-	# .shape;
-	# print annos
-	# break;
-	
-	ims_html=[];
-	captions=[];
-	for num_num,anno_num in enumerate(annos_to_keep):
-	# annos[17:]:
-		im=cv2.imread(im_curr);
-		cv2.circle(im,tuple(annos[anno_num]),2,(0,0,255),-1);
-		out_file=os.path.join(out_dir,str(num_num)+'.jpg');
-
-		ims_html.append([util.getRelPath(out_file,dir_server)]);
-		captions.append([str(num_num)]);
-		cv2.imwrite(out_file,im);
-
-	visualize.writeHTML(out_file_html,ims_html,captions,100,100);
-	# visualize.writeHTMLForFolder(out_dir);
-
-
-
-	
-
+def main():
+	makeHTMLForMaps()
+	# data_dir='../data/tfd/train_test_files';
+	# file_list=[os.path.join(data_dir,'test_ckLabels_4.txt')];
+	# new_files=[file_curr[:file_curr.rindex('.')]+'_withAnno.txt' for file_curr in file_list];	
+	# writeAnnoFile(file_list,new_files)
 
 	# saveHappyNeutralTrainTest()
 	# writeTrainTestFilesWithAnno()
