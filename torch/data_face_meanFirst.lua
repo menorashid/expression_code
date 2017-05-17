@@ -15,7 +15,10 @@ do
 
         self.start_idx_face=1;
         self.input_size={96,96};
-        
+        if args.input_size then
+            self.input_size=args.input_size
+        end
+
         self.angles={-5,5};
         self.pixel_augment={0.5,1.5};
         self.scale={0.7,1.4};
@@ -37,10 +40,7 @@ do
         -- optimize flag
         self.optimize=args.optimize;
 
-        if args.input_size then
-            self.input_size=args.input_size
-        end
-
+        
         -- MODIFIED
         self.mean_im=image.load(self.mean_file);
         self.std_im=image.load(self.std_file);
@@ -363,6 +363,7 @@ do
         -- set input range 0-1
         local inputs_org=batch_inputs;
         local min_vals=self.min_layer:forward(inputs_org):clone();
+        -- print (min_vals:size(),inputs_org:size())
         inputs_org=inputs_org-min_vals;
         local max_vals=self.max_layer:forward(inputs_org):clone();
         inputs_org:cdiv(max_vals);

@@ -933,7 +933,7 @@ def combineTFDCkFiles():
     util.writeFile(out_file,lines_all);
     
 def main(args):
-    modifyCKClassesForTFD();
+    # modifyCKClassesForTFD();
     # makeCKTrainTestFolds();
     # saveCKresizeImages();
 
@@ -942,10 +942,15 @@ def main(args):
     # num_folds=6;
 
     # data_dir='../data/ck_192/train_test_files';
-    # train_pre='train_';
     # num_folds=10;
+    
+    data_dir='../data/karina_vids/train_test_files_deviceInstalled_01_192_mask';
+    num_folds=6;
 
-    # saveCKMeanSTDImages(data_dir,train_pre,resize_size=[192,192],num_folds=num_folds)
+    train_pre='train_';
+
+
+    saveCKMeanSTDImages(data_dir,train_pre,resize_size=[192,192],num_folds=num_folds)
 
     # combineTFDCkFiles();
 

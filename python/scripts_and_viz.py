@@ -28,7 +28,7 @@ def writeBlurScript(\
     testAfter=10,
     dispAfter=1,
     dispPlotAfter=10,
-    batchSizeTest=128,
+    batchSizeTest=64,
     modelTest=None,
     resume_dir_meta=None,
     twoClass=False,
@@ -38,7 +38,8 @@ def writeBlurScript(\
     onlyLast=False,
     lower=False,
     input_size=None,
-    withAnno=False
+    withAnno=False,
+    weights=False
     ):
     data_path=os.path.join(dir_files,'train_'+str(fold_num)+'.txt');
     if val_data_path is None:
@@ -109,6 +110,10 @@ def writeBlurScript(\
 
     if input_size is not None:
         command = command+['-input_size',input_size];        
+
+    if weights:
+        weights_file=os.path.join(dir_files,'weights_'+str(fold_num)+'.npy'); 
+        command = command+['-weights_file',weights_file];                   
 
     command = [str(c_curr) for c_curr in command];
     command=' '.join(command);
@@ -800,14 +805,52 @@ def writeScriptSchemesAutoThresh():
 
 
 def createComparativeHtml():
-    experiment_name='test_mean_blur';
-    out_dir_meta_meta=os.path.join(dir_server,'expression_project','experiments');
-    out_dir_meta=os.path.join(out_dir_meta_meta,'ck_meanBlur_fixThresh_100_inc')
-    out_dir_baseline=os.path.join(out_dir_meta_meta,'khorrami_ck_rerun');
-    dir_files='../data/ck_96/train_test_files';
-    dir_caption=['ncl','mixcl','mix','bl']
-    dir_comps=[os.path.join(out_dir_meta,dir_caption_curr,'200') for dir_caption_curr in dir_caption[:3]]+[out_dir_baseline];
-    range_folds=[6];
+    # experiment_name='test_mean_blur';
+    # out_dir_meta_meta=os.path.join(dir_server,'expression_project','experiments');
+    # out_dir_meta=os.path.join(out_dir_meta_meta,'ck_meanBlur_fixThresh_100_inc')
+    # out_dir_baseline=os.path.join(out_dir_meta_meta,'khorrami_ck_rerun');
+    # dir_files='../data/ck_96/train_test_files';
+    # dir_caption=['ncl','mixcl','mix','bl']
+    # dir_comps=[os.path.join(out_dir_meta,dir_caption_curr,'200') for dir_caption_curr in dir_caption[:3]]+[out_dir_baseline];
+    # range_folds=[6];
+
+    out_dir_meta=os.path.join(dir_server,'expression_project','experiments');
+    # out_dir_meta=os.path.join(out_dir_meta_meta,'ck_meanBlur_fixThresh_100_inc')
+    # out_dir_baseline=os.path.join(out_dir_meta_meta,'khorrami_ck_rerun');
+    # dir_files='../data/karina_vids/train_test_files_deviceInstalled_01_192';
+    # dir_caption=['last','last_self','higher','higher_self','slr_self']
+    # dir_comps=['horses_twoClass_01_ft_onlyLast_192_dI',
+    #             'horses_twoClass_01_ft_onlyLast_192_dI_selfMean',
+    #             'horses_twoClass_01_ft_higherLast_192_dI',
+    #             'horses_twoClass_01_ft_higherLast_192_dI_selfMean',
+    #             # 'horses_twoClass_01_ft_slr_192_dI',
+    #             'horses_twoClass_01_ft_slr_192_dI_selfMean']
+    
+    # dir_caption=['slr_self']
+    # dir_comps=[ 'horses_twoClass_01_ft_slr_192_dI_selfMean']
+
+    dir_files='../data/karina_vids/train_test_files_deviceInstalled_01_192_mask';
+    experiment_pre='horses_twoClass_01_ft_192_dI_mask_'
+    # experiment_name,mean_im_path,std_im_path,lower,onlyLast
+    dir_caption=['onlyLast_selfMean', 
+                'onlyLast', 
+                'higherLast_selfMean', 
+                'higherLast', 
+                'slr_selfMean', 
+                'slr']
+    
+    dir_comps=[experiment_pre+'onlyLast_selfMean', 
+                experiment_pre+'onlyLast', 
+                experiment_pre+'higherLast_selfMean', 
+                experiment_pre+'higherLast', 
+                experiment_pre+'slr_selfMean', 
+                experiment_pre+'slr']
+    
+    
+
+    dir_comps=[os.path.join(out_dir_meta,dir_curr) for dir_curr in dir_comps]
+    range_folds=[0];
+    out_file_html=os.path.join(dir_comps[0],'comparison.html');
     
     expressions=[None]
     right=True;
@@ -816,17 +859,17 @@ def createComparativeHtml():
     npy_file_gt='1_gt_labels.npy';
     posts=['_org','_gb_gcam','_gb_gcam_pred','_hm','_hm_pred','_gb_gcam_org','_gb_gcam_org_pred']
     
-    batchSizeTest=128;
+    batchSizeTest=64;
     for expression_curr in expressions:
-    
-        out_file_html=os.path.join(out_dir_meta,str(expression_curr)+'.html');
+        if out_file_html is None:
+            out_file_html=os.path.join(out_dir_meta,str(expression_curr)+'.html');
         ims_all=[];
         captions_all=[];
         for fold_num in range_folds:    
             data_path=os.path.join(dir_files,'train_'+str(fold_num)+'.txt');
             gt_labels_file=os.path.join(dir_comps[0],str(fold_num),'test_images',npy_file_gt);
             gt_labels=np.load(gt_labels_file);    
-            num_batches=int(math.ceil(len(gt_labels)/128.0))
+            num_batches=int(math.ceil(len(gt_labels)/float(batchSizeTest)))
             im_pre=np.array([str(batch_num)+'_'+str(im_num) for batch_num in range(1,num_batches+1) for im_num in range(1,batchSizeTest+1)]);
             im_pre=im_pre[:len(gt_labels)];
             if expression_curr is not None:
@@ -849,7 +892,7 @@ def createComparativeHtml():
                     ims_all.append(im_row[:]);
                     captions_all.append(caption_row[:])
 
-        visualize.writeHTML(out_file_html,ims_all,captions_all,100,100);
+        visualize.writeHTML(out_file_html,ims_all,captions_all,192,192);
         print out_file_html.replace(dir_server,click_str);
 
 def printTestAccuracy():
@@ -1136,10 +1179,10 @@ def main():
     
     
 
-
+    createComparativeHtml();
     # writeScriptTFDTestsDiffSchemes();
     # writeScriptSchemesAutoThresh();
-    writeScriptTFDTestsDiffSchemes();
+    # writeScriptTFDTestsDiffSchemes();
     # writeScriptSchemesFixThresh();
     return
     num_folds=10;

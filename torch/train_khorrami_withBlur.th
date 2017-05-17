@@ -143,6 +143,7 @@ function test(params)
     net = net:cuda();
     net:evaluate();
 
+    print (net);
     local net_gb= net:clone();
     net_gb:replace(utils.guidedbackprop);
     net_gb = net_gb:cuda();
@@ -189,9 +190,9 @@ function test(params)
     for i=1,params.iterationsTest do
         -- vd:getTrainingData();
         local out_file_pre=paths.concat(out_dir_images,i..'_');
-        -- vd:buildBlurryBatch(params.layer_to_viz,0.0,'ncl',out_file_pre,true);
+        vd:buildBlurryBatch(params.layer_to_viz,0.0,'ncl',out_file_pre,true);
             -- ,true)
-        vd:getTrainingData();
+        -- vd:getTrainingData();
         
 
         vd.training_set.data=vd.training_set.data:cuda();
@@ -282,14 +283,14 @@ function test(params)
     -- print (outputs_all:size())
     -- print (batch_targets_all:size());
 
-    local conf = optim.ConfusionMatrix( {'neutral', 'anger','contempt','disgust', 'fear', 'happy', 'sadness', 'surprise'} )
+    -- local conf = optim.ConfusionMatrix( {'neutral', 'anger','contempt','disgust', 'fear', 'happy', 'sadness', 'surprise'} )
     -- local conf = optim.ConfusionMatrix( {'anger','disgust', 'fear', 'happy', 'sadness', 'surprise','neutral'} )
     if params.twoClass then
         outputs_all=torch.remainder(outputs_all+1,2);
         batch_targets_all=torch.remainder(batch_targets_all+1,2);
     end
 
-    -- local conf = optim.ConfusionMatrix( {'neutral','pain'} )
+    local conf = optim.ConfusionMatrix( {'neutral','pain'} )
     conf:zero()    
     conf:batchAdd( outputs_all, batch_targets_all )         -- accumulate errors
     print (conf);
@@ -344,6 +345,7 @@ function main(params)
     if params.limit<0 then
     	params.limit=nil;
     end
+    
     local val_data_path;
     local val_human_path
     if params.testAfter>0 then
@@ -498,7 +500,12 @@ function main(params)
     -- else
         criterion=nn.SoftMarginCriterion():cuda();
     else
-        criterion=nn.CrossEntropyCriterion():cuda()
+        if params.weights_file~='' then
+            local criterion_weights=npy4th.loadnpy(params.weights_file);
+            criterion=nn.CrossEntropyCriterion(criterion_weights):cuda()
+        else
+            criterion=nn.CrossEntropyCriterion():cuda()
+        end
     end
     
     -- local criterion = nn.ClassNLLCriterion(criterion_weights):cuda();
@@ -686,7 +693,7 @@ cmd:option('-incrementDifficultyAfter',0);
 cmd:option('-activationThreshMax',0.5);
 cmd:option('-scheme',scheme);
 cmd:option('-conv_size',5);
-cmd:option('-layer_to_viz',8);
+cmd:option('-layer_to_viz',12);
 cmd:option('-optimize',true);
 -- cmd:option('-overwrite',true);
 
@@ -716,6 +723,7 @@ cmd:option('-twoClass',false);
 cmd:option('-onlyLast',false);
 cmd:option('-lower',false);
 cmd:option('-input_size',96);
+cmd:option('-weights_file','');
 
 params = cmd:parse(arg)
 -- main(params);    
