@@ -1,3 +1,4 @@
+require 'loadcaffe';
 require 'cunn'
 require 'cudnn'
 require 'nn';
@@ -136,19 +137,45 @@ function createFineTuneModelKhorrami(in_file,out_file,num_out)
 
 end
 
+function modifyAlexnet(out_file,num_out,path_caffe_alexnet,path_deploy)
+    if not path_caffe_alexnet then
+        path_caffe_alexnet='../models/bvlc_alexnet.caffemodel';
+    end
+    if not path_deploy then
+        path_deploy='../models/deploy.prototxt';
+    end
+
+    local model = loadcaffe.load(path_deploy,path_caffe_alexnet, 'cudnn')
+    model:remove(#model);
+    model:remove(#model);
+    local model_new=nn.Sequential();
+    model_new:add(nn.Linear(4096,num_out));
+    model_new=makeXavierGaussian(model_new);
+    model:add(model_new:get(#model_new));
+
+    print (model);
+    print (out_file);
+    torch.save(out_file,model);
+end
+
 function main()
+    num_out=31;
+    out_file='../models/alexnet_'..num_out..'.dat';
+    modifyAlexnet(out_file,num_out);
+
+
     -- num_out=8;
     -- out_file='../models/khorrami_bigger_'..num_out..'.dat'
     -- createAdditionalConvKhorramiModel(out_file,num_out);
 
-    num_out=2;
+    -- num_out=2;
     -- in_file='../experiments/khorrami_ck_rerun/0/final/model_all_final.dat';
     -- out_file='../models/ck_khorrami_model_forFT_'..num_out..'.dat';
     
-    in_file='../experiments/khorrami_large_ck/0/final/model_all_final.dat';
-    out_file='../models/ck_khorrami_model_forFT_192_'..num_out..'.dat';
+    -- in_file='../experiments/khorrami_large_ck/0/final/model_all_final.dat';
+    -- out_file='../models/ck_khorrami_model_forFT_192_'..num_out..'.dat';
     
-    createFineTuneModelKhorrami(in_file,out_file,num_out)
+    -- createFineTuneModelKhorrami(in_file,out_file,num_out)
 	
 
     -- local num_out=2;
