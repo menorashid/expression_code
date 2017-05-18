@@ -49,42 +49,29 @@ def makeFolds(folder,num_per_cat,num_folds,ext='.jpg'):
     train_all=[[] for num in range(num_folds)];
     test_all=[[] for num in range(num_folds)];
 
-    for cat_curr in categories_uni:
+    for cat_num,cat_curr in enumerate(categories_uni):
         files_rel=files_all[categories==cat_curr];
-        print cat_curr,len(files_rel)
         for fold_num in range(num_folds):
-            # print files_rel[:3]
             np.random.shuffle(files_rel);
-            # print files_rel[:3]
             start_idx=0;
             end_idx=min(start_idx+num_per_cat,files_rel.shape[0]);
             idx_keep=np.zeros((files_rel.shape[0],))
             idx_keep[start_idx:end_idx]=1;
             train_files=list(files_rel[idx_keep>0]);
             test_files=list(files_rel[idx_keep<=0]);
-            # print cat_curr,len(train_files),len(test_files),start_idx,end_idx
+            train_files=[file_curr+' '+str(cat_num) for file_curr in train_files]
+            test_files=[file_curr+' '+str(cat_num) for file_curr in test_files]
             train_all[fold_num]=train_all[fold_num]+train_files;
             test_all[fold_num]=test_all[fold_num]+test_files;
-            # start_idx=end_idx;
-        # raw_input();
-
+        
     return train_all,test_all;
 
-    # print set(categories);
-
-
-
-def main():
-    # in_folder='../data/office/domain_adaptation_images'
+def saveTrainTestFiles():
     in_folder='../data/office/domain_adaptation_images_227'
     dir_files='../data/office/domain_adaptation_images_227/train_test_files'
     util.mkdir(dir_files);
-    # domains=['amazon','dslr','webcam'];
-    # num_per_cats=[20,8,8];
-    domains=['dslr'];
-    num_per_cats=[8]
-    # [20,8,8];
-    
+    domains=['amazon','dslr','webcam'];
+    num_per_cats=[20,8,8];
     num_folds=5;
     for domain,num_per_cat in zip(domains,num_per_cats):
         folder=os.path.join(in_folder,domain);
@@ -93,9 +80,14 @@ def main():
             train_file_curr=os.path.join(dir_files,'train_'+domain+'_'+str(fold_num)+'.txt');
             test_file_curr=os.path.join(dir_files,'test_'+domain+'_'+str(fold_num)+'.txt');
             print train_file_curr,test_file_curr,len(train_all[fold_num]),len(test_all[fold_num]);
+            random.shuffle(train_all[fold_num]);
+            random.shuffle(test_all[fold_num]);
             util.writeFile(train_file_curr,train_all[fold_num]);
             util.writeFile(test_file_curr,test_all[fold_num]);
-        # break;
+
+
+def main():
+    saveTrainTestFiles()
     
 
 if __name__=='__main__':
