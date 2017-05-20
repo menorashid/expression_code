@@ -28,7 +28,7 @@ def writeBlurScript(\
     testAfter=10,
     dispAfter=1,
     dispPlotAfter=10,
-    batchSizeTest=64,
+    batchSizeTest=128,
     modelTest=None,
     resume_dir_meta=None,
     twoClass=False,
@@ -47,6 +47,7 @@ def writeBlurScript(\
             val_data_path=os.path.join(dir_files,'test_'+str(fold_num)+'_withAnno.txt');
         else:
             val_data_path=os.path.join(dir_files,'test_'+str(fold_num)+'.txt');
+    
     if mean_im_path is None:
         mean_im_path=os.path.join(dir_files,'train_'+str(fold_num)+'_mean.png');
     if std_im_path is None:
@@ -64,9 +65,10 @@ def writeBlurScript(\
     elif resume_dir_meta is not None:
         model_path_resume=os.path.join(resume_dir_meta,str(fold_num),'final','model_all_final.dat');
         command = command+['-model',model_path_resume];            
-    
-    command = command+['-mean_im_path',mean_im_path];
-    command = command+['-std_im_path',std_im_path];
+    if mean_im_path!='':
+        command = command+['-mean_im_path',mean_im_path];
+    if std_im_path!='':
+        command = command+['-std_im_path',std_im_path];
     command = command+['-batchSize',batchSize];
     
     command = command+['learningRate',learningRate];
@@ -829,27 +831,42 @@ def createComparativeHtml():
     # dir_caption=['slr_self']
     # dir_comps=[ 'horses_twoClass_01_ft_slr_192_dI_selfMean']
 
-    dir_files='../data/karina_vids/train_test_files_deviceInstalled_01_192_mask';
-    experiment_pre='horses_twoClass_01_ft_192_dI_mask_'
-    # experiment_name,mean_im_path,std_im_path,lower,onlyLast
-    dir_caption=['onlyLast_selfMean', 
-                'onlyLast', 
-                'higherLast_selfMean', 
-                'higherLast', 
-                'slr_selfMean', 
-                'slr']
+    # dir_files='../data/karina_vids/train_test_files_deviceInstalled_01_192_mask';
+    # experiment_pre='horses_twoClass_01_ft_192_dI_mask_'
+    # # experiment_name,mean_im_path,std_im_path,lower,onlyLast
+    # dir_caption=['onlyLast_selfMean', 
+    #             'onlyLast', 
+    #             'higherLast_selfMean', 
+    #             'higherLast', 
+    #             'slr_selfMean', 
+    #             'slr']
     
-    dir_comps=[experiment_pre+'onlyLast_selfMean', 
-                experiment_pre+'onlyLast', 
-                experiment_pre+'higherLast_selfMean', 
-                experiment_pre+'higherLast', 
-                experiment_pre+'slr_selfMean', 
-                experiment_pre+'slr']
+    # dir_comps=[experiment_pre+'onlyLast_selfMean', 
+    #             experiment_pre+'onlyLast', 
+    #             experiment_pre+'higherLast_selfMean', 
+    #             experiment_pre+'higherLast', 
+    #             experiment_pre+'slr_selfMean', 
+    #             experiment_pre+'slr']
+    
+    
+
+    # dir_comps=[os.path.join(out_dir_meta,dir_curr) for dir_curr in dir_comps]
+    # range_folds=[0];
+
+
+    dir_files='../data/office/domain_adaptation_images_256/train_test_files';
+    experiment_pre='office_bl_amazon_less_256'
+    # experiment_name,mean_im_path,std_im_path,lower,onlyLast
+    dir_caption=['0']
+    
+    dir_comps=[experiment_pre]
     
     
 
     dir_comps=[os.path.join(out_dir_meta,dir_curr) for dir_curr in dir_comps]
-    range_folds=[0];
+    range_folds=['amazon_0'];
+
+
     out_file_html=os.path.join(dir_comps[0],'comparison.html');
     
     expressions=[None]
@@ -857,9 +874,9 @@ def createComparativeHtml():
 
     npy_file_pred='1_pred_labels.npy';
     npy_file_gt='1_gt_labels.npy';
-    posts=['_org','_gb_gcam','_gb_gcam_pred','_hm','_hm_pred','_gb_gcam_org','_gb_gcam_org_pred']
+    posts=['_org','_gb_gcam','_gb_gcam_pred','_gb_gcam_org','_gb_gcam_org_pred','_gb_gcam_th','_gb_gcam_th_pred','_blur','_blur_pred']
     
-    batchSizeTest=64;
+    batchSizeTest=128;
     for expression_curr in expressions:
         if out_file_html is None:
             out_file_html=os.path.join(out_dir_meta,str(expression_curr)+'.html');
@@ -867,7 +884,7 @@ def createComparativeHtml():
         captions_all=[];
         for fold_num in range_folds:    
             data_path=os.path.join(dir_files,'train_'+str(fold_num)+'.txt');
-            gt_labels_file=os.path.join(dir_comps[0],str(fold_num),'test_images',npy_file_gt);
+            gt_labels_file=os.path.join(dir_comps[0],str(fold_num),'test_images_blur',npy_file_gt);
             gt_labels=np.load(gt_labels_file);    
             num_batches=int(math.ceil(len(gt_labels)/float(batchSizeTest)))
             im_pre=np.array([str(batch_num)+'_'+str(im_num) for batch_num in range(1,num_batches+1) for im_num in range(1,batchSizeTest+1)]);
@@ -881,7 +898,7 @@ def createComparativeHtml():
             # print im_pre.shape
             im_pre_rel=im_pre[bin_keep];
 
-            dir_ims=[os.path.join(dir_curr,str(fold_num),'test_images') for dir_curr in dir_comps];
+            dir_ims=[os.path.join(dir_curr,str(fold_num),'test_images_blur') for dir_curr in dir_comps];
             pred_rels=[np.load(os.path.join(dir_curr,npy_file_pred))[bin_keep] for dir_curr in dir_ims];
 
             for idx_im_pre_curr,im_pre_curr in enumerate(im_pre_rel):

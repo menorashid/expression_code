@@ -246,6 +246,19 @@ def saveCKMeanSTDImages(data_dir=None,train_pre=None,resize_size=None,num_folds=
         print mean_file,np.min(mean_im),np.max(mean_im),mean_im.shape;
         print std_file,np.min(std_im),np.max(std_im),std_im.shape;
 
+def saveWeightsFile(train_file,weights_file):
+    lines=util.readLinesFromFile(train_file);
+    classes=[int(line_curr.split(' ')[1]) for line_curr in lines];
+    classes_set=set(classes);
+    n_samples=len(classes);
+    n_classes=len(classes_set);
+    class_counts=[classes.count(c) for c in range(n_classes)]
+    # print class_counts;
+    
+    balanced_weights=float(n_samples)/(n_classes*np.array(class_counts))
+    balanced_weights=balanced_weights/np.sum(balanced_weights);
+    print balanced_weights
+    np.save(weights_file,balanced_weights);
 
 def scratch():
     data_dir='../data/ck_96/train_test_files';
