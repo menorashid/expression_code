@@ -121,6 +121,142 @@ def writeBlurScript(\
     command=' '.join(command);
     return command;
 
+
+def writeSchemeScripts_fixed(path_to_th,
+                        dir_files,
+                        dir_exp_old,
+                        folds_range,
+                        model_file,
+                        experiment_name,
+                        epoch_starts=[100,200,300,400,500],
+                        epoch_total=1000,
+                        startingActivation=0.05,
+                        activationThreshMax=0.5,
+                        fixThresh=0.05,
+                        ratioBlur=0.5,
+                        schemes=['ncl','mixcl','mix'],
+                        batchSize=128,
+                        out_dir_meta_meta=None,
+                        out_script=None,
+                        num_scripts=2,
+                        learningRate=0.01,
+                        saveAfter=100,
+                        testAfter=10,
+                        dispAfter=1,
+                        dispPlotAfter=10,
+                        batchSizeTest=128,
+                        modelTest=None,
+                        resume_dir_meta=None,
+                        twoClass=False,
+                        val_data_path=None,
+                        mean_im_path=None,
+                        std_im_path=None,
+                        onlyLast=False,
+                        lower=False,
+                        input_size=None,
+                        withAnno=False,
+                        weights=False
+                        ):
+
+    
+    if out_dir_meta_meta is None:
+        out_dir_meta_meta='../experiments/'+experiment_name;
+    if out_script is None:
+        out_script='../scripts/train_'+experiment_name+'_loc';
+    
+    util.mkdir(out_dir_meta_meta);
+    
+    commands=[];
+    for fold_num in folds_range:
+        data_file=os.path.join(dir_files,'train_'+str(fold_num)+'.txt');
+        num_lines=len(util.readLinesFromFile(data_file));
+        epoch_size=num_lines/batchSize;
+        for scheme in schemes:
+            out_dir_meta=os.path.join(out_dir_meta_meta,scheme);
+            util.mkdir(out_dir_meta);
+            for epoch_start in epoch_starts: 
+                out_dir_meta_curr=os.path.join(out_dir_meta,str(epoch_start));
+                util.mkdir(out_dir_meta_curr);
+                if scheme=='mix':
+                    if epoch_total%epoch_start==0:
+                        activationThreshMax=fixThresh*(epoch_total/epoch_start-1);
+                    else:
+                        activationThreshMax=fixThresh*math.floor(epoch_total/epoch_start);
+                    print activationThreshMax
+                    command=writeBlurScript(path_to_th,out_dir_meta_curr,dir_files,fold_num,model_file=model_file,
+                                            batchSize=batchSize,
+                                            scheme=scheme,
+                                            ratioBlur=ratioBlur,
+                                            incrementDifficultyAfter=0,
+                                            startingActivation=0,
+                                            fixThresh=fixThresh,
+                                            activationThreshMax=activationThreshMax,
+                                            iterations=epoch_total,
+
+                                            learningRate=learningRate,
+                                            saveAfter=saveAfter,
+                                            testAfter=testAfter,
+                                            dispAfter=dispAfter,
+                                            dispPlotAfter=dispPlotAfter,
+                                            batchSizeTest=batchSizeTest,
+                                            modelTest=modelTest,
+                                            resume_dir_meta=resume_dir_meta,
+                                            twoClass=twoClass,
+                                            val_data_path=val_data_path,
+                                            mean_im_path=mean_im_path,
+                                            std_im_path=std_im_path,
+                                            onlyLast=onlyLast,
+                                            lower=lower,
+                                            input_size=input_size,
+                                            withAnno=withAnno,
+                                            weights=weights)
+                else:
+                    resume_model=os.path.join(dir_exp_old,str(fold_num),'intermediate','model_all_'+str(epoch_start*epoch_size)+'.dat');
+                    assert(os.path.exists(resume_model));
+                    command=writeBlurScript(path_to_th,out_dir_meta_curr,dir_files,fold_num,
+                                            batchSize=batchSize,
+                                            model_file=resume_model,
+                                            scheme=scheme,
+                                            ratioBlur=ratioBlur,
+                                            incrementDifficultyAfter=epoch_start,
+                                            startingActivation=startingActivation,
+                                            fixThresh=fixThresh,
+                                            activationThreshMax=activationThreshMax,
+                                            iterations=epoch_total-epoch_start,
+
+                                            learningRate=learningRate,
+                                            saveAfter=saveAfter,
+                                            testAfter=testAfter,
+                                            dispAfter=dispAfter,
+                                            dispPlotAfter=dispPlotAfter,
+                                            batchSizeTest=batchSizeTest,
+                                            modelTest=modelTest,
+                                            resume_dir_meta=resume_dir_meta,
+                                            twoClass=twoClass,
+                                            val_data_path=val_data_path,
+                                            mean_im_path=mean_im_path,
+                                            std_im_path=std_im_path,
+                                            onlyLast=onlyLast,
+                                            lower=lower,
+                                            input_size=input_size,
+                                            withAnno=withAnno,
+                                            weights=weights)
+                
+                commands.append(command);
+
+
+
+
+    commands=np.array(commands);
+    commands_split=np.array_split(commands,num_scripts);
+    for idx_commands,commands in enumerate(commands_split):
+        out_file_script_curr=out_script+'_'+str(idx_commands)+'.sh';
+        print idx_commands,out_file_script_curr,len(commands)
+        # print commands;
+        util.writeFile(out_file_script_curr,commands);
+
+
+
 def writeCKScripts():
     experiment_name='khorrami_ck_rerun';
     out_dir_meta='../experiments/'+experiment_name;

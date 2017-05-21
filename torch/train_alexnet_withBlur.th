@@ -136,7 +136,7 @@ function test(params)
                     activation_upper=0,
                     augmentation=false,
                     limit=params.limit,
-                    ratio_blur=1.0,
+                    ratio_blur=0.0,
                     conv_size=params.conv_size,
                     net=net:clone(),
                     net_gb=net_gb:clone(),
@@ -155,7 +155,7 @@ function test(params)
     for i=1,params.iterationsTest do
 
         local out_file_pre=paths.concat(out_dir_images,i..'_');
-        vd:buildBlurryBatch(params.layer_to_viz,0.05,'ncl',out_file_pre,true);
+        vd:buildBlurryBatch(params.layer_to_viz,0.0,'ncl',out_file_pre,true);
         -- vd:getTrainingData();
         
 
@@ -236,6 +236,13 @@ function test(params)
     logger:writeString(s..'\n');       
     npy4th.savenpy(out_file_pred, preds_all)
     npy4th.savenpy(out_file_gt, batch_targets_all)
+
+    local python_string='python ../python/makeHtml.py';
+    python_string=python_string..' '..out_dir_images;
+    python_string=python_string..' '..params.val_data_path;
+    python_string=python_string..' '..params.batchSizeTest;
+    print (python_string);
+    os.execute(python_string);
 
 end
 
@@ -379,7 +386,9 @@ function main(params)
     logger:writeString(dump.tostring(optimState)..'\n');
     print (optimState)
 
-    local td,vd = getTdVd(params,nil,net_gb_clone,activation_upper);
+    local activationThresh,activationThresh_increment,activation_upper = getBlurActivationInfo(params);
+    
+    local td,vd = getTdVd(params,net:clone(),net_gb_clone,activation_upper);
     
 
     local optimMethod = optim.adam
@@ -403,7 +412,7 @@ function main(params)
     local val_losses = {};
     local val_losses_iter = {};
 
-    local activationThresh,activationThresh_increment,activation_upper = getBlurActivationInfo(params);
+    
 
     local blur_num=0;
     for i=1,params.iterations do
@@ -575,9 +584,9 @@ cmd:option('-weights_file','');
 cmd:option('-lower',false);
 
 params = cmd:parse(arg)
--- main(params);    
+main(params);    
 
-cmd:option('-outDirTest',paths.concat(params.outDir,'test_images_blur'));
+cmd:option('-outDirTest',paths.concat(params.outDir,'test_images'));
 params = cmd:parse(arg)
 test(params);
 

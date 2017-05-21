@@ -108,12 +108,12 @@ def saveFullTestFiles():
 def writeScriptForBaseline():
     domain_train='amazon';
     domain_test='webcam';
-    num_folds=1;
+    num_folds=5;
     path_to_th='train_alexnet_withBlur.th';
     experiment_name='office_bl_'+domain_train+'_less_256';
     out_dir_meta=os.path.join('../experiments',experiment_name);
     out_script=os.path.join('../scripts','train_'+experiment_name);
-    num_scripts=1;
+    num_scripts=2;
     dir_files='../data/office/domain_adaptation_images_256/train_test_files'
     util.mkdir(out_dir_meta);
     model_file='../models/alexnet_31.dat';
@@ -155,9 +155,49 @@ def writeScriptForBaseline():
         util.writeFile(out_file_script_curr,commands);
 
 
-def main():
+def writeSchemeScripts():
+    domain_train='amazon';
+    num_folds=1;
+    path_to_th='train_alexnet_withBlur.th';
+    experiment_name='office_fixThresh_'+domain_train+'_less_256';
+    num_scripts=2;
+    dir_files='../data/office/domain_adaptation_images_256/train_test_files'
+    dir_exp_old='../experiments/office_bl_'+domain_train+'_less_256';
+    model_file='../models/alexnet_31.dat';
+    learningRate=0.001;
+    testAfter=1;
+    saveAfter=5;
+    epoch_total=50;
+    epoch_starts=range(5,30,5);
+    lower=True;
+    folds_range=[domain_train+'_'+str(num_fold) for num_fold in range(num_folds)];
+    weights=True;
+    mean_im_path='';
+    std_im_path='';
+    scripts_and_viz.writeSchemeScripts_fixed(path_to_th,
+                    dir_files,
+                    dir_exp_old,
+                    folds_range,
+                    model_file,
+                    experiment_name,
+                    epoch_starts=epoch_starts,
+                    epoch_total=epoch_total,
+                    num_scripts=num_scripts,
+                    learningRate=learningRate,
+                    saveAfter=saveAfter,
+                    testAfter=testAfter,
+                    mean_im_path=mean_im_path,
+                    std_im_path=std_im_path,
+                    lower=lower,
+                    weights=weights
+                    )
+    
 
-    writeScriptForBaseline()
+def main():
+    
+    writeSchemeScripts();
+
+    # writeScriptForBaseline()
     # saveFullTestFiles()
 
     # saveTrainTestFiles()
