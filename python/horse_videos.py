@@ -83,7 +83,9 @@ def saveFrames((in_file,out_dir_curr,num_secs)):
     vid_points=np.arange(num_secs,vid_length,num_secs)
 
     for idx_vid_point,vid_point in enumerate(vid_points):
-        out_file=os.path.join(out_dir_curr,str(idx_vid_point)+'.jpg');
+        idx_vid_point=str(idx_vid_point)
+        out_file='0'*(5-len(idx_vid_point))+idx_vid_point;
+        out_file=os.path.join(out_dir_curr,out_file+'.jpg');
         command=[];
         command.extend(['ffmpeg','-y','-hide_banner','-loglevel','panic']);
         command.extend(['-accurate_seek', '-ss', str(vid_point)])
@@ -471,7 +473,7 @@ def writeScriptForTraining():
     #             ('horses_twoClass_01_ft_higherLast_192_dI_selfMean',None,None,True,False),
     #             ('horses_twoClass_01_ft_slr_192_dI_selfMean', None,None,False,False),
     #             ('horses_twoClass_01_ft_slr_192_dI', mean_im_path,std_im_path,False,False)]
-    
+
     # experiment_name='horses_twoClass_01_ft_onlyLast_192_dI_selfMean'; mean_im_path=None;std_im_path=None;lower=False;onlyLast=True
     # experiment_name='horses_twoClass_01_ft_higherLast_192_dI_selfMean'; mean_im_path=None;std_im_path=None;lower=True;onlyLast=False
     # experiment_name='horses_twoClass_01_ft_higherLast_192_dI'; lower=True;onlyLast=False
@@ -640,7 +642,46 @@ def writeTrainTestFilesMaskIm():
 
 
 def main():
-    writeScriptForTraining();
+    out_dir='../scratch/images_for_proposal';
+    # cow_vid='brown_cow_in_field.mp4';
+    cow_vid='Dairy_Cows_in_the_Field.mp4';
+    sheep_vid='sheep_in_a_field.mp4';
+    
+    cow_vid='Outside2.MP4';
+    in_file=os.path.join(out_dir,cow_vid);
+    out_dir_curr=os.path.join(out_dir,'horse_2');
+    
+    num_secs=1;
+    # in_file=os.path.join(out_dir,sheep_vid);
+    # out_dir_curr=os.path.join(out_dir,'sheep');
+    # num_secs=1;
+    util.mkdir(out_dir_curr);
+
+    saveFrames((in_file,out_dir_curr,num_secs))
+    visualize.writeHTMLForFolder(out_dir_curr);
+
+    # range_secs=list(range(780,845,5));
+    # in_dir='/home/SSD3/maheen-data/Dropbox/horse_videos/Experimental pain/Observer not present/Pain'
+    # in_file='#5_5a.mts';
+    # in_file=os.path.join(in_dir,in_file);
+    # out_dir='../scratch/images_for_proposal/horse';
+    # util.makedirs(out_dir);
+    # for idx_sec_curr,sec_curr in enumerate(range_secs):
+    #     idx_sec_curr=str(idx_sec_curr);
+    #     out_file='0'*(5-len(idx_sec_curr))+idx_sec_curr;
+    #     out_file=os.path.join(out_dir,out_file+'.jpg');
+    #     command=[];
+    #     command.extend(['ffmpeg','-y','-hide_banner','-loglevel','panic']);
+    #     command.extend(['-accurate_seek', '-ss', str(sec_curr)])
+    #     command.extend(['-i',util.escapeString(in_file)]);
+    #     command.extend(['-frames:v','1',out_file]);
+    #     command=' '.join(command);
+    #     # print command
+    #     # raw_input();
+    #     os.system(command);
+    # visualize.writeHTMLForFolder(out_dir);
+
+    # writeScriptForTraining();
     # writeTrainTestFiles()
     # makeResizeImAndFile()
     # saveMasks()

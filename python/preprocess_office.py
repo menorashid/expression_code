@@ -106,95 +106,198 @@ def saveFullTestFiles():
         util.writeFile(out_file,lines);
 
 def writeScriptForBaseline():
-    domain_train='amazon';
-    domain_test='webcam';
+    # domain_train='amazon';
+    # domain_test='webcam';
     num_folds=5;
     path_to_th='train_alexnet_withBlur.th';
-    experiment_name='office_bl_'+domain_train+'_less_256';
-    out_dir_meta=os.path.join('../experiments',experiment_name);
-    out_script=os.path.join('../scripts','train_'+experiment_name);
-    num_scripts=2;
+    num_scripts=1;
     dir_files='../data/office/domain_adaptation_images_256/train_test_files'
-    util.mkdir(out_dir_meta);
     model_file='../models/alexnet_31.dat';
     learningRate=0.001;
     testAfter=1;
     saveAfter=5;
     iterations=50;
     lower=True;
-    commands=[];
-    for num_fold in range(num_folds):
-        fold_num=domain_train+'_'+str(num_fold);
-        # val_data_path=os.path.join(dir_files,'test_'+domain_test+'_all.txt');
-        # modelTest=os.path.join(out_dir_meta,fold_num,'intermediate','model_all_40.dat');
-        command=scripts_and_viz.writeBlurScript(\
-                path_to_th,
-                out_dir_meta,
-                dir_files,
-                fold_num,
-                model_file=model_file,
-                learningRate=learningRate,
-                # val_data_path=val_data_path,
-                mean_im_path='',
-                std_im_path='',
-                iterations=iterations,
-                testAfter=testAfter,
-                saveAfter=saveAfter,
-                weights=True,
-                lower=lower
-                # ,
-                # modelTest=modelTest
-                );
-        commands.append(command);
+    
+    for domain_train in ['webcam','dslr']:
+        experiment_name='office_bl_'+domain_train+'_less_256';
+        out_dir_meta=os.path.join('../experiments',experiment_name);
+        out_script=os.path.join('../scripts','train_'+experiment_name);
+        util.mkdir(out_dir_meta);
+        commands=[];    
+        for num_fold in range(num_folds):
+            fold_num=domain_train+'_'+str(num_fold);
+            # val_data_path=os.path.join(dir_files,'test_'+domain_test+'_all.txt');
+            # modelTest=os.path.join(out_dir_meta,fold_num,'intermediate','model_all_40.dat');
+            command=scripts_and_viz.writeBlurScript(\
+                    path_to_th,
+                    out_dir_meta,
+                    dir_files,
+                    fold_num,
+                    model_file=model_file,
+                    learningRate=learningRate,
+                    # val_data_path=val_data_path,
+                    mean_im_path='',
+                    std_im_path='',
+                    iterations=iterations,
+                    testAfter=testAfter,
+                    saveAfter=saveAfter,
+                    weights=True,
+                    lower=lower
+                    # ,
+                    # modelTest=modelTest
+                    );
+            commands.append(command);
 
-    commands=np.array(commands);
-    commands_split=np.array_split(commands,num_scripts);
-    for idx_commands,commands in enumerate(commands_split):
-        out_file_script_curr=out_script+'_'+str(idx_commands)+'.sh';
-        print out_file_script_curr,len(commands);
-        util.writeFile(out_file_script_curr,commands);
+        commands=np.array(commands);
+        commands_split=np.array_split(commands,num_scripts);
+        for idx_commands,commands in enumerate(commands_split):
+            out_file_script_curr=out_script+'_'+str(idx_commands)+'.sh';
+            print out_file_script_curr,len(commands);
+            util.writeFile(out_file_script_curr,commands);
 
 
 def writeSchemeScripts():
-    domain_train='amazon';
+    domain_train='dslr';
+    # domain_train='amazon';
+    # domain_test='webcam';
     num_folds=1;
     path_to_th='train_alexnet_withBlur.th';
-    experiment_name='office_fixThresh_'+domain_train+'_less_256';
-    num_scripts=2;
-    dir_files='../data/office/domain_adaptation_images_256/train_test_files'
-    dir_exp_old='../experiments/office_bl_'+domain_train+'_less_256';
-    model_file='../models/alexnet_31.dat';
-    learningRate=0.001;
-    testAfter=1;
-    saveAfter=5;
-    epoch_total=50;
-    epoch_starts=range(5,30,5);
-    lower=True;
-    folds_range=[domain_train+'_'+str(num_fold) for num_fold in range(num_folds)];
-    weights=True;
-    mean_im_path='';
-    std_im_path='';
-    scripts_and_viz.writeSchemeScripts_fixed(path_to_th,
-                    dir_files,
-                    dir_exp_old,
-                    folds_range,
-                    model_file,
-                    experiment_name,
-                    epoch_starts=epoch_starts,
-                    epoch_total=epoch_total,
-                    num_scripts=num_scripts,
-                    learningRate=learningRate,
-                    saveAfter=saveAfter,
-                    testAfter=testAfter,
-                    mean_im_path=mean_im_path,
-                    std_im_path=std_im_path,
-                    lower=lower,
-                    weights=weights
-                    )
+
+    autoThresh=True; 
+    for activationThreshMax in [0.15,0.5]:
+        schemes=['mixcl','ncl']
+        
+        # activationThreshMax=0.5
+        # schemes=['mixcl','ncl','mix']
+        # autoThresh=False
+        
+
+        if autoThresh:
+            experiment_name='office_autoThresh_'+domain_train+'_less_256_'+str(int(activationThreshMax*100));
+        else:
+            experiment_name='office_fixThresh_'+domain_train+'_less_256';
+
+        num_scripts=1;
+        dir_files='../data/office/domain_adaptation_images_256/train_test_files'
+        dir_exp_old='../experiments/office_bl_'+domain_train+'_less_256';
+        model_file='../models/alexnet_31.dat';
+        learningRate=0.001;
+        testAfter=1;
+        saveAfter=5;
+        epoch_total=50;
+        
+        epoch_starts=range(5,30,5);
+        lower=True;
+        folds_range=[domain_train+'_'+str(num_fold) for num_fold in range(num_folds)];
+        weights=True;
+        mean_im_path='';
+        std_im_path='';
+        val_data_path=None;
+        modelTest=None;
+        outDirTest=None;
+        
+
+        # modelTest=os.path.join(dir_exp_old,'amazon_0','final','model_all_final.dat');
+        # val_data_path=os.path.join(dir_files,'test_'+domain_test+'_all.txt')
+        # outDirTest='test_images_'+domain_test;
+        # epoch_starts=[None]
+        # schemes=['bl']
+        # val_data_path=val_data_path,
+        # modelTest=modelTest,
+        # )
+
+        scripts_and_viz.writeSchemeScripts_fixed(path_to_th,
+                        dir_files,
+                        dir_exp_old,
+                        folds_range,
+                        model_file,
+                        experiment_name,
+                        epoch_starts=epoch_starts,
+                        epoch_total=epoch_total,
+                        num_scripts=num_scripts,
+                        learningRate=learningRate,
+                        saveAfter=saveAfter,
+                        testAfter=testAfter,
+                        mean_im_path=mean_im_path,
+                        std_im_path=std_im_path,
+                        lower=lower,
+                        weights=weights,
+                        schemes=schemes,
+                        autoThresh=autoThresh,
+                        val_data_path=val_data_path,
+                        modelTest=modelTest,
+                        activationThreshMax=activationThreshMax,
+                        outDirTest=outDirTest
+                        )
     
 
 def main():
+    # domain_train='amazon'
+    # domain_test_post='_webcam'
+    # dir_meta_meta='../experiments'
+    # # dir_metas=['office_fixThresh_'+domain_train+'_less_256']*2
+    # # # ,'office_fixThresh_'+domain_train+'_less_256' ;
+    # # # schemes=[['mixcl','ncl','mix'],['bl']]
+    # # schemes=[['mixcl','ncl','mix'],['bl']]
+    # # inc_ranges=[range(5,30,5),['None']]
+
+    # dir_metas=['office_bl_'+domain_train+'_less_256' for domain_train in ['webcam','dslr']]
+    # domain_test_post='';
+    # # *2
+    # # ,'office_fixThresh_'+domain_train+'_less_256' ;
+    # # schemes=[['mixcl','ncl','mix'],['bl']]
+    # schemes=[['mixcl','ncl']]
+    # # ,['bl']]
+    # inc_ranges=[range(5,30,5)]
+    # # ,['None']]
     
+    # range_folds=range(5);
+    # for dir_meta_curr in dir_metas:
+    #     dir_meta=os.path.join(dir_meta_meta,dir_meta_curr);
+    #     print dir_meta;
+    #     for num_fold in range_folds:
+    # # ,scheme,inc_range in zip(dir_metas,schemes,inc_ranges):
+        
+    #         num_fold=dir_meta_curr.split('_')[2]+'_'+str(num_fold);    
+    #         file_curr=os.path.join(dir_meta,str(num_fold),'test_images'+domain_test_post,'log_test.txt');
+    #         lines=util.readLinesFromFile(file_curr);
+    #         accu=lines[-3].split(':')[-1];
+
+    #         print '\t'.join([num_fold,'x',accu[1:6]]);
+
+    # return
+    # domain_train='amazon'
+    # domain_test_post='_webcam'
+    # dir_meta_meta='../experiments'
+    # # dir_metas=['office_fixThresh_'+domain_train+'_less_256']*2
+    # # # ,'office_fixThresh_'+domain_train+'_less_256' ;
+    # # # schemes=[['mixcl','ncl','mix'],['bl']]
+    # # schemes=[['mixcl','ncl','mix'],['bl']]
+    # # inc_ranges=[range(5,30,5),['None']]
+
+    # dir_metas=['office_autoThresh_'+domain_train+'_less_256']
+    # # *2
+    # # ,'office_fixThresh_'+domain_train+'_less_256' ;
+    # # schemes=[['mixcl','ncl','mix'],['bl']]
+    # schemes=[['mixcl','ncl']]
+    # # ,['bl']]
+    # inc_ranges=[range(5,30,5)]
+    # # ,['None']]
+    
+    # num_fold=domain_train+'_0';
+    # for dir_meta_curr,schemes,inc_range in zip(dir_metas,schemes,inc_ranges):
+    #     dir_meta=os.path.join(dir_meta_meta,dir_meta_curr);
+    #     print dir_meta;
+    #     for scheme in schemes:
+    #         for inc in inc_range:
+    #             file_curr=os.path.join(dir_meta,scheme,str(inc),str(num_fold),'test_images'+domain_test_post,'log_test.txt');
+    #             lines=util.readLinesFromFile(file_curr);
+    #             accu=lines[-3].split(':')[-1];
+
+    #             print '\t'.join([scheme,str(inc),'x',accu[1:6]]);
+
+
     writeSchemeScripts();
 
     # writeScriptForBaseline()

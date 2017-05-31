@@ -39,7 +39,8 @@ def writeBlurScript(\
     lower=False,
     input_size=None,
     withAnno=False,
-    weights=False
+    weights=False,
+    outDirTest=None
     ):
     data_path=os.path.join(dir_files,'train_'+str(fold_num)+'.txt');
     if val_data_path is None:
@@ -113,6 +114,9 @@ def writeBlurScript(\
     if input_size is not None:
         command = command+['-input_size',input_size];        
 
+    if outDirTest is not None:
+        command = command+['-outDirTestPost',outDirTest];        
+
     if weights:
         weights_file=os.path.join(dir_files,'weights_'+str(fold_num)+'.npy'); 
         command = command+['-weights_file',weights_file];                   
@@ -128,6 +132,7 @@ def writeSchemeScripts_fixed(path_to_th,
                         folds_range,
                         model_file,
                         experiment_name,
+                        autoThresh=False,
                         epoch_starts=[100,200,300,400,500],
                         epoch_total=1000,
                         startingActivation=0.05,
@@ -155,14 +160,15 @@ def writeSchemeScripts_fixed(path_to_th,
                         lower=False,
                         input_size=None,
                         withAnno=False,
-                        weights=False
+                        weights=False,
+                        outDirTest=None
                         ):
 
     
     if out_dir_meta_meta is None:
         out_dir_meta_meta='../experiments/'+experiment_name;
     if out_script is None:
-        out_script='../scripts/train_'+experiment_name+'_loc';
+        out_script='../scripts/train_'+experiment_name;
     
     util.mkdir(out_dir_meta_meta);
     
@@ -209,7 +215,72 @@ def writeSchemeScripts_fixed(path_to_th,
                                             lower=lower,
                                             input_size=input_size,
                                             withAnno=withAnno,
-                                            weights=weights)
+                                            weights=weights,
+                                            outDirTest=outDirTest)
+                
+                elif scheme=='bl':
+                    command=writeBlurScript(path_to_th,out_dir_meta_curr,dir_files,                     fold_num,
+                                            batchSize=batchSize,
+                                            model_file=model_file,
+                                            scheme=scheme,
+                                            iterations=epoch_total,
+                                            learningRate=learningRate,
+                                            saveAfter=saveAfter,
+                                            testAfter=testAfter,
+                                            dispAfter=dispAfter,
+                                            dispPlotAfter=dispPlotAfter,
+                                            batchSizeTest=batchSizeTest,
+                                            modelTest=modelTest,
+                                            resume_dir_meta=resume_dir_meta,
+                                            twoClass=twoClass,
+                                            val_data_path=val_data_path,
+                                            mean_im_path=mean_im_path,
+                                            std_im_path=std_im_path,
+                                            onlyLast=onlyLast,
+                                            lower=lower,
+                                            input_size=input_size,
+                                            withAnno=withAnno,
+                                            weights=weights,
+                                            outDirTest=outDirTest)
+                elif autoThresh:
+                    resume_model=os.path.join(dir_exp_old,str(fold_num),'intermediate','model_all_'+str(epoch_start*epoch_size)+'.dat');
+                    assert(os.path.exists(resume_model));
+                    if epoch_total%epoch_start==0:
+                        num_inc=epoch_total/epoch_start -1;
+                    else:
+                        num_inc=math.floor(epoch_total/epoch_start);
+                    startingActivation_curr=activationThreshMax/num_inc;
+                    print startingActivation_curr,num_inc,startingActivation_curr*num_inc
+
+                    command=writeBlurScript(path_to_th,out_dir_meta_curr,dir_files,fold_num,
+                                            batchSize=batchSize,
+                                            model_file=resume_model,
+                                            scheme=scheme,
+                                            ratioBlur=ratioBlur,
+                                            incrementDifficultyAfter=epoch_start,
+                                            startingActivation=startingActivation_curr,
+                                            fixThresh=0,
+                                            activationThreshMax=activationThreshMax,
+                                            iterations=epoch_total-epoch_start,
+
+                                            learningRate=learningRate,
+                                            saveAfter=saveAfter,
+                                            testAfter=testAfter,
+                                            dispAfter=dispAfter,
+                                            dispPlotAfter=dispPlotAfter,
+                                            batchSizeTest=batchSizeTest,
+                                            modelTest=modelTest,
+                                            resume_dir_meta=resume_dir_meta,
+                                            twoClass=twoClass,
+                                            val_data_path=val_data_path,
+                                            mean_im_path=mean_im_path,
+                                            std_im_path=std_im_path,
+                                            onlyLast=onlyLast,
+                                            lower=lower,
+                                            input_size=input_size,
+                                            withAnno=withAnno,
+                                            weights=weights,
+                                            outDirTest=outDirTest)
                 else:
                     resume_model=os.path.join(dir_exp_old,str(fold_num),'intermediate','model_all_'+str(epoch_start*epoch_size)+'.dat');
                     assert(os.path.exists(resume_model));
@@ -240,7 +311,8 @@ def writeSchemeScripts_fixed(path_to_th,
                                             lower=lower,
                                             input_size=input_size,
                                             withAnno=withAnno,
-                                            weights=weights)
+                                            weights=weights,
+                                            outDirTest=outDirTest)
                 
                 commands.append(command);
 

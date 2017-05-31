@@ -387,7 +387,7 @@ function main(params)
     print (optimState)
 
     local activationThresh,activationThresh_increment,activation_upper = getBlurActivationInfo(params);
-    
+
     local td,vd = getTdVd(params,net:clone(),net_gb_clone,activation_upper);
     
 
@@ -582,11 +582,12 @@ cmd:option('-input_size',256);
 cmd:option('-crop_size',224);
 cmd:option('-weights_file','');
 cmd:option('-lower',false);
+cmd:option('-outDirTestPost','test_images');
 
 params = cmd:parse(arg)
 main(params);    
 
-cmd:option('-outDirTest',paths.concat(params.outDir,'test_images'));
+cmd:option('-outDirTest',paths.concat(params.outDir,params.outDirTestPost));
 params = cmd:parse(arg)
 test(params);
 
