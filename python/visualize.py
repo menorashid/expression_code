@@ -181,7 +181,7 @@ def plotErrorBars(dict_to_plot,x_lim,y_lim,xlabel,y_label,title,out_file,margin=
     plt.savefig(out_file);
     plt.close();
 
-def plotSimple(xAndYs,out_file,title='',xlabel='',ylabel='',legend_entries=None,loc=0,outside=False,logscale=False,colors=None,xticks=None):
+def plotSimple(xAndYs,out_file,title='',xlabel='',ylabel='',legend_entries=None,loc=0,outside=False,logscale=False,colors=None,xticks=None,scatter=False,markers=None):
     plt.title(title);
     plt.grid(1);
     plt.xlabel(xlabel);
@@ -191,11 +191,22 @@ def plotSimple(xAndYs,out_file,title='',xlabel='',ylabel='',legend_entries=None,
     # assert len(xs)==len(ys)
     handles=[];
     for idx_x_y,(x,y) in enumerate(xAndYs):
-        if colors is not None:
-            color_curr=colors[idx_x_y];
-            handle,=plt.plot(x,y,color_curr,linewidth=5.0);
+        if not scatter:
+            if colors is not None:
+                color_curr=colors[idx_x_y];
+                handle,=plt.plot(x,y,color_curr,linewidth=5.0);
+            else:
+                handle,=plt.plot(x,y,linewidth=5.0);
         else:
-            handle,=plt.plot(x,y,linewidth=5.0);
+            if colors is not None:
+                color_curr=colors[idx_x_y];
+                if markers is None:
+                    marker_curr='o';
+                else:
+                    marker_curr=markers[idx_x_y];
+                handle,=plt.plot(x,y,color_curr,marker=marker_curr,ls='None');
+            else:
+                handle,=plt.plot(x,y,marker='o',ls='None');
 
         handles.append(handle);
     if legend_entries is not None:
@@ -223,7 +234,6 @@ def writeHTMLForFolder(path_to_im,ext='jpg',height=300,width=300):
     captions=im_paths;
     out_file_html=os.path.join(path_to_im,path_to_im[path_to_im.rindex('/')+1:]+'.html');
     writeHTML(out_file_html,im_paths,captions,height=height,width=width);
-
 
 def plotGroupBar(out_file,dict_vals,xtick_labels,legend_vals,colors,xlabel='',ylabel='',title='',width=0.25,ylim=None,loc=None):
     # print 'loc',loc

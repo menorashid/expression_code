@@ -81,6 +81,194 @@ function doTheUpdate(td,net,criterion,parameters,gradParameters,optimMethod,opti
     return loss;
 end
 
+function extract_fc7(params)
+    print ('setting_threads');
+    torch.setnumthreads(1);
+    if params.limit<0 then
+        params.limit=nil;
+    end
+    
+    local out_dir_images=params.outDirTest;
+    paths.mkdir(out_dir_images);
+    
+    -- local out_file_loss_val=paths.concat(out_dir_images,'loss_final_val.npy');
+    -- local out_file_loss_val_ind=paths.concat(out_dir_images,'loss_final_val_ind.npy');
+    local out_file_pred=paths.concat(out_dir_images,'1_pred_labels_fc7.npy');
+    local out_file_gt=paths.concat(out_dir_images,'1_gt_labels_fc7.npy');
+    local out_file_feat=paths.concat(out_dir_images,'1_fc7.npy');
+    local out_file_log=paths.concat(out_dir_images,'log_test_fc7.txt');
+    local logger=torch.DiskFile(out_file_log,'w');
+
+    logger:writeString(dump.tostring(params)..'\n');
+    print (params);
+
+    cutorch.setDevice(params.gpu);
+
+
+    logger:writeString(dump.tostring('loading network')..'\n');
+    print ('loading network');
+
+    local net=torch.load(params.modelTest);
+
+    logger:writeString(dump.tostring('done loading network')..'\n');
+    print ('done loading network');
+    
+    logger:writeString(dump.tostring('making cuda')..'\n');
+    
+    local net_fc7=net:clone();
+    for i=1,3 do
+        net_fc7:remove(#net_fc7);
+    end
+    net_fc7 = net_fc7:cuda();
+    net_fc7:evaluate();
+
+    net=net:cuda();
+    net:evaluate();
+
+    -- local net_gb= net:clone();
+    -- net_gb:replace(utils.guidedbackprop);
+    -- net_gb = net_gb:cuda();
+    -- net_gb:evaluate();
+    local net_gb=nil;
+
+    print (net);
+    print (net_fc7);
+
+    logger:writeString(dump.tostring('done')..'\n');
+    print ('done');
+
+    local data_params={file_path=params.val_data_path,
+                    batch_size=params.batchSizeTest,
+                    mean_file=params.mean_im_path,
+                    std_file=params.std_im_path,
+                    activation_upper=0,
+                    augmentation=false,
+                    limit=params.limit,
+                    ratio_blur=0.0,
+                    conv_size=params.conv_size,
+                    net=nil,
+                    net_gb=nil,
+                    optimize=params.optimize,
+                    twoClass=params.twoClass,
+                    input_size={params.input_size,params.input_size}
+                    };
+
+    local vd=data_face(data_params);
+    local batch_targets_all=nil;
+    local outputs_all=nil;
+    local preds_all=nil;
+    local fc7_all=nil;
+    local val_losses={};
+    local accuracy={};
+    local val_losses_iter={};
+    for i=1,params.iterationsTest do
+
+        local out_file_pre=paths.concat(out_dir_images,i..'_');
+        -- vd:buildBlurryBatch(params.layer_to_viz,0.0,'ncl',out_file_pre,true);
+        vd:getTrainingData();
+        
+
+        vd.training_set.data=vd.training_set.data:cuda();
+        vd.training_set.label=vd.training_set.label:cuda();
+        
+
+        local batch_inputs=vd.training_set.data;
+        local batch_targets=vd.training_set.label;
+
+        local outputs=net:forward(batch_inputs:clone());
+
+        local fc7 = net_fc7:forward(batch_inputs);
+        print (fc7:size(),torch.min(fc7),torch.max(fc7));
+
+
+        local indices;
+        if params.twoClass then
+            local outputs_d=outputs:double();
+            indices=torch.zeros(outputs:size());
+            indices[outputs_d:gt(0)]=1;
+            indices[outputs_d:le(0)]=-1;
+        else
+            local maxs;
+            maxs, indices = torch.max(outputs, 2);
+        end
+        indices=indices:type(batch_targets:type());
+        indices=indices:view(batch_targets:size());
+        local accuracy_curr = torch.sum(batch_targets:eq(indices))/batch_targets:nElement();
+        val_losses[#val_losses+1]=loss;
+        accuracy[#accuracy+1]=accuracy_curr;
+        val_losses_iter[#val_losses_iter+1]=i;
+
+        disp_str=string.format("minibatches processed: %6s, accuracy = %6.6f", i, accuracy_curr)
+        logger:writeString(dump.tostring(disp_str)..'\n');
+        print (disp_str);
+        
+        if not outputs_all then
+            outputs_all=outputs:clone();    
+        else
+            outputs_all=torch.cat(outputs_all,outputs,1);
+        end
+
+        if not batch_targets_all then
+            batch_targets_all = batch_targets:clone();
+        else
+            batch_targets_all = torch.cat(batch_targets_all,batch_targets,1);
+        end
+
+        if not preds_all then
+            preds_all = indices:clone();
+        else
+            preds_all = torch.cat(preds_all,indices,1);
+        end
+
+        if not fc7_all then
+            fc7_all = fc7:clone();
+        else
+            fc7_all=torch.cat(fc7_all,fc7,1);
+        end
+
+
+    end
+    assert (outputs_all:size(1)==batch_targets_all:size(1))
+    assert (outputs_all:size(1)>=#vd.lines_face)
+    outputs_all=outputs_all[{{1,#vd.lines_face},{}}]
+    batch_targets_all=batch_targets_all[{{1,#vd.lines_face}}];
+    preds_all=preds_all[{{1,#vd.lines_face}}];
+    fc7_all=fc7_all[{{1,#vd.lines_face}}];
+    
+    print (fc7_all:size(),preds_all:size());
+
+    local conf_classes={};
+    for i=1,31 do
+        conf_classes[#conf_classes+1]=''..i;
+    end
+    -- print (outputs_all:size())
+    -- print (batch_targets_all:size());
+
+    -- local conf = optim.ConfusionMatrix( {'neutral', 'anger','contempt','disgust', 'fear', 'happy', 'sadness', 'surprise'} )
+    -- local conf = optim.ConfusionMatrix( {'anger','disgust', 'fear', 'happy', 'sadness', 'surprise','neutral'} )
+    local conf = optim.ConfusionMatrix( conf_classes);
+    if params.twoClass then
+        outputs_all=torch.remainder(outputs_all+1,2);
+        batch_targets_all=torch.remainder(batch_targets_all+1,2);
+    end
+
+    conf:zero()    
+    conf:batchAdd( outputs_all, batch_targets_all )         -- accumulate errors
+    print (conf);
+    local s=tostring(conf)
+    logger:writeString(s..'\n');       
+    npy4th.savenpy(out_file_pred, preds_all)
+    npy4th.savenpy(out_file_gt, batch_targets_all)
+    npy4th.savenpy(out_file_feat,fc7_all)
+
+    -- local python_string='python ../python/makeHtml.py';
+    -- python_string=python_string..' '..out_dir_images;
+    -- python_string=python_string..' '..params.val_data_path;
+    -- python_string=python_string..' '..params.batchSizeTest;
+    -- print (python_string);
+    -- os.execute(python_string);
+
+end
 
 function test(params)
     print ('setting_threads');
@@ -585,9 +773,10 @@ cmd:option('-lower',false);
 cmd:option('-outDirTestPost','test_images');
 
 params = cmd:parse(arg)
-main(params);    
+-- main(params);    
 
 cmd:option('-outDirTest',paths.concat(params.outDir,params.outDirTestPost));
 params = cmd:parse(arg)
-test(params);
+-- test(params);
+extract_fc7(params);
 

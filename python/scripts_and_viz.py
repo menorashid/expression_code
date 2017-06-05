@@ -318,7 +318,7 @@ def writeSchemeScripts_fixed(path_to_th,
 
 
 
-
+    commands_org=commands[:];
     commands=np.array(commands);
     commands_split=np.array_split(commands,num_scripts);
     for idx_commands,commands in enumerate(commands_split):
@@ -326,6 +326,7 @@ def writeSchemeScripts_fixed(path_to_th,
         print idx_commands,out_file_script_curr,len(commands)
         # print commands;
         util.writeFile(out_file_script_curr,commands);
+    return commands_org;
 
 
 
